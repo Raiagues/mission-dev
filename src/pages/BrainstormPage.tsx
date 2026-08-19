@@ -150,12 +150,13 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
     const offsetX = start.x - node.x;
     const offsetY = start.y - node.y;
     const pointerId = event.pointerId;
+    const nodeWidth = node.width;
     (event.currentTarget as HTMLElement).setPointerCapture(pointerId);
 
     function move(moveEvent: PointerEvent) {
       if (moveEvent.pointerId !== pointerId) return;
       const point = worldPoint(moveEvent.clientX, moveEvent.clientY);
-      const x = Math.max(0, Math.min(WORLD_WIDTH - node.width, point.x - offsetX));
+      const x = Math.max(0, Math.min(WORLD_WIDTH - nodeWidth, point.x - offsetX));
       const y = Math.max(0, Math.min(WORLD_HEIGHT - DEFAULT_NODE_HEIGHT, point.y - offsetY));
       setNodes((current) => current.map((item) => item.id === id ? { ...item, x, y } : item));
     }
