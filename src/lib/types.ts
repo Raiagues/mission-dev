@@ -1,6 +1,7 @@
 export type Language = "pt" | "en";
 export type NodeState = "defined" | "hypothesis" | "open" | "closed";
 export type LinkType = "normal" | "suggestion";
+export type NodeBucket = "main" | "ideas" | "questions";
 
 export type MissionNode = {
   id: number;
@@ -13,6 +14,7 @@ export type MissionNode = {
   state: NodeState;
   type?: "normal" | "center" | "question" | "suggestion";
   issueKey?: string;
+  bucket?: NodeBucket;
 };
 
 export type MissionLink = {

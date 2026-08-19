@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCloseProblemPhase, countWords, createInitialLinks, createInitialNodes, getIssues, getProgress, getVisibleNodeIds, limitWords } from "../src/lib/missionModel";
+import { canCloseProblemPhase, countWords, createInitialLinks, createInitialNodes, getIssues, getProgress, getScopedIssues, getVisibleNodeIds, layoutTopDown, limitWords } from "../src/lib/missionModel";
 
 describe("mission conception model", () => {
   it("limits card text to 24 words", () => {
@@ -26,5 +26,23 @@ describe("mission conception model", () => {
     expect(visible.has(2)).toBe(true);
     expect(visible.has(6)).toBe(true);
     expect(visible.has(4)).toBe(false);
+  });
+
+  it("shows only inconsistencies that belong to the focused map", () => {
+    const nodes = createInitialNodes();
+    const links = createInitialLinks();
+    const visible = getVisibleNodeIds(2, nodes, links);
+    expect(getScopedIssues(nodes, visible)).toHaveLength(0);
+    expect(getScopedIssues(nodes, new Set(nodes.map((node) => node.id))).length).toBeGreaterThan(0);
+  });
+
+  it("organizes the main hierarchy from top to bottom", () => {
+    const nodes = createInitialNodes();
+    const arranged = layoutTopDown(nodes, createInitialLinks());
+    const root = arranged.find((node) => node.id === 1);
+    const result = arranged.find((node) => node.id === 2);
+    expect(root).toBeDefined();
+    expect(result).toBeDefined();
+    expect((result?.y ?? 0)).toBeGreaterThan(root?.y ?? 0);
   });
 });

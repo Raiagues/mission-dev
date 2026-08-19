@@ -1,66 +1,107 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Brand } from "../components/Brand";
+import { IssueStudyPanel } from "../components/IssueStudyPanel";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
-import { canCloseProblemPhase, createInitialLinks, createInitialNodes, getCheckpoints, getIssues, getProgress, getVisibleNodeIds, limitWords, MAX_CARD_WORDS } from "../lib/missionModel";
-import type { Language, MissionIssue, MissionLink, MissionNode, NodeState } from "../lib/types";
+import { canCloseProblemPhase, getCheckpoints, getIssues, getNodeStateProgress, getProgress, getScopedIssues, getVisibleNodeIds, layoutTopDown, limitWords, MAX_CARD_WORDS } from "../lib/missionModel";
+import { buildVirtualProjectFiles, exportProject, strongestStateForNodeIds } from "../lib/projectStore";
+import type { CustomProgressCriterion, IssueStudy, MissionProject } from "../lib/projectStore";
+import type { Language, MissionIssue, MissionLink, MissionNode, NodeBucket, NodeState } from "../lib/types";
+import { ux } from "../lib/uxCopy";
 
 type Props = {
   language: Language;
+  project: MissionProject;
   t: (path: string) => string;
   onLanguageChange: (language: Language) => void;
+  onProjectChange: (project: MissionProject) => void;
   onHome: () => void;
+  onBackSetup: () => void;
 };
 
 type Transform = { scale: number; x: number; y: number };
-type ConnectionDraft = { from: number; x: number; y: number } | null;
+type Drawer = "issues" | "progress" | "files" | "studies" | null;
 type NodeMenu = { id: number; x: number; y: number } | null;
+type DragState = { id: number; pointerId: number; offsetX: number; offsetY: number } | null;
+type PanState = { pointerId: number; startX: number; startY: number; originX: number; originY: number } | null;
+type ConnectionState = { from: number; pointerId: number; x: number; y: number } | null;
 
 const WORLD_WIDTH = 2600;
 const WORLD_HEIGHT = 1600;
-const DEFAULT_NODE_HEIGHT = 110;
+const NODE_HEIGHT = 112;
 
-export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props) {
+export function BrainstormPage({ language, project, t, onLanguageChange, onProjectChange, onHome, onBackSetup }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<DragState>(null);
+  const panRef = useRef<PanState>(null);
+  const connectionRef = useRef<ConnectionState>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [nodes, setNodes] = useState<MissionNode[]>(createInitialNodes);
-  const [links, setLinks] = useState<MissionLink[]>(createInitialLinks);
-  const [transform, setTransform] = useState<Transform>({ scale: 0.72, x: -70, y: -40 });
+  const [transform, setTransform] = useState<Transform>({ scale: 0.72, x: -80, y: -35 });
+  const [panning, setPanning] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<number | null>(null);
   const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [nodeMenu, setNodeMenu] = useState<NodeMenu>(null);
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [issuesOpen, setIssuesOpen] = useState(false);
-  const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
-  const [ideaModalOpen, setIdeaModalOpen] = useState(false);
-  const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
-  const [ideaText, setIdeaText] = useState("");
+  const [drawer, setDrawer] = useState<Drawer>(null);
   const [focusRootId, setFocusRootId] = useState<number | null>(null);
   const [pageStack, setPageStack] = useState<(number | null)[]>([]);
-  const [connectionDraft, setConnectionDraft] = useState<ConnectionDraft>(null);
+  const [connectionDraft, setConnectionDraft] = useState<ConnectionState>(null);
+  const [cardModalOpen, setCardModalOpen] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
+  const [cardText, setCardText] = useState("");
+  const [activeStudyId, setActiveStudyId] = useState<string | null>(null);
+  const [criterionName, setCriterionName] = useState("");
+  const [criterionMandatory, setCriterionMandatory] = useState(true);
   const [phaseClosed, setPhaseClosed] = useState(false);
-  const [nextNodeId, setNextNodeId] = useState(30);
-  const [nextLinkId, setNextLinkId] = useState(200);
 
-  const issues = useMemo(() => getIssues(nodes), [nodes]);
-  const checkpoints = useMemo(() => getCheckpoints(nodes), [nodes]);
-  const progress = useMemo(() => getProgress(nodes), [nodes]);
-  const phaseCanClose = useMemo(() => canCloseProblemPhase(nodes), [nodes]);
+  const nodes = project.board.nodes;
+  const links = project.board.links;
   const visibleNodeIds = useMemo(() => getVisibleNodeIds(focusRootId, nodes, links), [focusRootId, links, nodes]);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedLinkId !== null && document.activeElement?.tagName !== "TEXTAREA") deleteLink(selectedLinkId);
-      if (event.key === "Escape") closeTransientPanels();
+  const visibleNodes = useMemo(() => nodes.filter((node) => visibleNodeIds.has(node.id)), [nodes, visibleNodeIds]);
+  const allIssues = useMemo(() => getIssues(nodes), [nodes]);
+  const scopedIssues = useMemo(() => getScopedIssues(nodes, visibleNodeIds, project.resolvedIssueKeys), [nodes, project.resolvedIssueKeys, visibleNodeIds]);
+  const activeStudy = activeStudyId ? project.studies.find((study) => study.id === activeStudyId) ?? null : null;
+  const activeStudyIssue = activeStudy ? allIssues.find((issue) => issue.key === activeStudy.issueKey) ?? null : null;
+  const files = useMemo(() => buildVirtualProjectFiles(project), [project]);
+  const standardCheckpoints = useMemo(() => getCheckpoints(focusRootId === null ? nodes : visibleNodes), [focusRootId, nodes, visibleNodes]);
+  const scopedCustomCriteria = useMemo(() => project.progress.customCriteria.filter((criterion) => criterion.scopeRootId === focusRootId), [focusRootId, project.progress.customCriteria]);
+  const displayProgress = useMemo(() => {
+    if (focusRootId !== null && project.progress.mode === "standard") return getNodeStateProgress(visibleNodes);
+    if (project.progress.mode === "standard") return getProgress(nodes);
+    if (scopedCustomCriteria.length === 0) return getNodeStateProgress(visibleNodes);
+    let score = 0;
+    for (const criterion of scopedCustomCriteria) {
+      const state = strongestStateForNodeIds(nodes, criterion.evidenceNodeIds);
+      if (state === "defined") score += 1;
+      if (state === "hypothesis") score += 0.5;
     }
+    return Math.round((score / scopedCustomCriteria.length) * 100);
+  }, [focusRootId, nodes, project.progress.mode, scopedCustomCriteria, visibleNodes]);
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedLinkId]);
+  const macroCanClose = useMemo(() => {
+    if (project.progress.mode === "standard") return canCloseProblemPhase(nodes, project.resolvedIssueKeys);
+    const globalCriteria = project.progress.customCriteria.filter((criterion) => criterion.scopeRootId === null);
+    if (globalCriteria.length === 0) return false;
+    const mandatoryReady = globalCriteria.every((criterion) => !criterion.mandatory || strongestStateForNodeIds(nodes, criterion.evidenceNodeIds) === "defined");
+    const criticalOpen = getScopedIssues(nodes, new Set(nodes.map((node) => node.id)), project.resolvedIssueKeys).some((issue) => issue.severity === "critical");
+    return mandatoryReady && !criticalOpen;
+  }, [nodes, project.progress.customCriteria, project.progress.mode, project.resolvedIssueKeys]);
+
+  function updateProject(patch: Partial<MissionProject>) {
+    onProjectChange({ ...project, ...patch });
+    setPhaseClosed(false);
+  }
+
+  function updateBoard(nextNodes: MissionNode[], nextLinks = links) {
+    updateProject({ board: { nodes: nextNodes, links: nextLinks } });
+  }
 
   function resolveNodeTitle(node: MissionNode): string {
     return node.titleKey ? t(node.titleKey) : node.title ?? "";
+  }
+
+  function resolveKicker(node: MissionNode): string {
+    return node.kickerKey.startsWith("nodes.") ? t(node.kickerKey) : node.kickerKey;
   }
 
   function stateLabel(state: NodeState): string {
@@ -70,16 +111,6 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
     return t("common.open");
   }
 
-  function closeTransientPanels() {
-    setNodeMenu(null);
-    setProgressOpen(false);
-    setIssuesOpen(false);
-    setSelectedLinkId(null);
-    setSelectedNodeId(null);
-    setHighlightIds(new Set());
-    setConnectionDraft(null);
-  }
-
   function worldPoint(clientX: number, clientY: number): { x: number; y: number } {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -87,7 +118,7 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
   }
 
   function nodeCenter(node: MissionNode): { x: number; y: number } {
-    return { x: node.x + node.width / 2, y: node.y + DEFAULT_NODE_HEIGHT / 2 };
+    return { x: node.x + node.width / 2, y: node.y + NODE_HEIGHT / 2 };
   }
 
   function linkPath(link: MissionLink): string {
@@ -96,8 +127,8 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
     if (!from || !to) return "";
     const a = nodeCenter(from);
     const b = nodeCenter(to);
-    const midX = (a.x + b.x) / 2;
-    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
+    const midY = (a.y + b.y) / 2;
+    return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
   }
 
   function issuePath(issue: MissionIssue): string {
@@ -107,130 +138,108 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
     if (!from || !to) return "";
     const a = nodeCenter(from);
     const b = nodeCenter(to);
-    const midY = (a.y + b.y) / 2;
-    return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
+    const midX = (a.x + b.x) / 2;
+    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
   }
 
-  function setNodeState(id: number, state: NodeState) {
-    setNodes((current) => current.map((node) => node.id === id ? { ...node, state } : node));
-    setNodeMenu(null);
-    setPhaseClosed(false);
+  function lockSelection() {
+    document.body.classList.add("workspace-interacting");
   }
 
-  function deleteNode(id: number) {
-    setNodes((current) => current.filter((node) => node.id !== id));
-    setLinks((current) => current.filter((link) => link.from !== id && link.to !== id));
-    setNodeMenu(null);
-    setSelectedNodeId(null);
-    setPhaseClosed(false);
+  function unlockSelection() {
+    document.body.classList.remove("workspace-interacting");
   }
 
-  function deleteLink(id: number) {
-    setLinks((current) => current.filter((link) => link.id !== id));
-    setSelectedLinkId(null);
-    setPhaseClosed(false);
-  }
-
-  function createLink(from: number, to: number, type: "normal" | "suggestion" = "normal") {
-    if (from === to) return;
-    const exists = links.some((link) => (link.from === from && link.to === to) || (link.from === to && link.to === from));
-    if (exists) return;
-    const link: MissionLink = { id: nextLinkId, from, to, type };
-    setLinks((current) => [...current, link]);
-    setNextLinkId((current) => current + 1);
-    setPhaseClosed(false);
-  }
-
-  function startNodeDrag(event: React.PointerEvent, id: number) {
+  function startNodeDrag(event: React.PointerEvent<HTMLDivElement>, id: number) {
+    if ((event.target as HTMLElement).closest("button, .node-connector")) return;
     event.preventDefault();
     event.stopPropagation();
     const node = nodes.find((item) => item.id === id);
     if (!node) return;
-    const start = worldPoint(event.clientX, event.clientY);
-    const offsetX = start.x - node.x;
-    const offsetY = start.y - node.y;
-    const pointerId = event.pointerId;
-    const nodeWidth = node.width;
-    (event.currentTarget as HTMLElement).setPointerCapture(pointerId);
-
-    function move(moveEvent: PointerEvent) {
-      if (moveEvent.pointerId !== pointerId) return;
-      const point = worldPoint(moveEvent.clientX, moveEvent.clientY);
-      const x = Math.max(0, Math.min(WORLD_WIDTH - nodeWidth, point.x - offsetX));
-      const y = Math.max(0, Math.min(WORLD_HEIGHT - DEFAULT_NODE_HEIGHT, point.y - offsetY));
-      setNodes((current) => current.map((item) => item.id === id ? { ...item, x, y } : item));
-    }
-
-    function stop(stopEvent: PointerEvent) {
-      if (stopEvent.pointerId !== pointerId) return;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-    }
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-  }
-
-  function startConnection(event: React.PointerEvent, id: number) {
-    event.preventDefault();
-    event.stopPropagation();
     const point = worldPoint(event.clientX, event.clientY);
-    setConnectionDraft({ from: id, x: point.x, y: point.y });
+    dragRef.current = { id, pointerId: event.pointerId, offsetX: point.x - node.x, offsetY: point.y - node.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedNodeId(id);
     setSelectedLinkId(null);
-
-    function move(moveEvent: PointerEvent) {
-      const currentPoint = worldPoint(moveEvent.clientX, moveEvent.clientY);
-      setConnectionDraft({ from: id, x: currentPoint.x, y: currentPoint.y });
-    }
-
-    function stop(stopEvent: PointerEvent) {
-      const element = document.elementFromPoint(stopEvent.clientX, stopEvent.clientY) as HTMLElement | null;
-      const nodeElement = element?.closest<HTMLElement>("[data-node-id]");
-      const targetId = nodeElement ? Number(nodeElement.dataset.nodeId) : NaN;
-      if (Number.isFinite(targetId) && targetId !== id) createLink(id, targetId);
-      setConnectionDraft(null);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-    }
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
+    setNodeMenu(null);
+    lockSelection();
   }
 
-  function startPan(event: React.PointerEvent) {
+  function startPan(event: React.PointerEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest("[data-node-id], [data-panel], [data-control], path")) return;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const originX = transform.x;
-    const originY = transform.y;
-    const pointerId = event.pointerId;
-    (event.currentTarget as HTMLElement).setPointerCapture(pointerId);
-
-    function move(moveEvent: PointerEvent) {
-      if (moveEvent.pointerId !== pointerId) return;
-      setTransform((current) => ({ ...current, x: originX + moveEvent.clientX - startX, y: originY + moveEvent.clientY - startY }));
-    }
-
-    function stop(stopEvent: PointerEvent) {
-      if (stopEvent.pointerId !== pointerId) return;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-    }
-
+    event.preventDefault();
+    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: transform.x, originY: transform.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPanning(true);
     setSelectedNodeId(null);
     setSelectedLinkId(null);
     setHighlightIds(new Set());
     setNodeMenu(null);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
+    lockSelection();
+  }
+
+  function startConnection(event: React.PointerEvent<HTMLButtonElement>, from: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    const point = worldPoint(event.clientX, event.clientY);
+    const draft = { from, pointerId: event.pointerId, x: point.x, y: point.y };
+    connectionRef.current = draft;
+    setConnectionDraft(draft);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedNodeId(from);
+    setSelectedLinkId(null);
+    lockSelection();
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (drag && drag.pointerId === event.pointerId) {
+      event.preventDefault();
+      const point = worldPoint(event.clientX, event.clientY);
+      const nextNodes = nodes.map((node) => node.id === drag.id ? { ...node, x: Math.max(0, Math.min(WORLD_WIDTH - node.width, point.x - drag.offsetX)), y: Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, point.y - drag.offsetY)) } : node);
+      updateBoard(nextNodes);
+      return;
+    }
+
+    const pan = panRef.current;
+    if (pan && pan.pointerId === event.pointerId) {
+      event.preventDefault();
+      setTransform((current) => ({ ...current, x: pan.originX + event.clientX - pan.startX, y: pan.originY + event.clientY - pan.startY }));
+      return;
+    }
+
+    const connection = connectionRef.current;
+    if (connection && connection.pointerId === event.pointerId) {
+      event.preventDefault();
+      const point = worldPoint(event.clientX, event.clientY);
+      const next = { ...connection, x: point.x, y: point.y };
+      connectionRef.current = next;
+      setConnectionDraft(next);
+    }
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const connection = connectionRef.current;
+    if (connection && connection.pointerId === event.pointerId) {
+      const element = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+      const card = element?.closest<HTMLElement>("[data-node-id]");
+      const targetId = card ? Number(card.dataset.nodeId) : NaN;
+      if (Number.isFinite(targetId) && targetId !== connection.from) createLink(connection.from, targetId);
+    }
+
+    dragRef.current = null;
+    panRef.current = null;
+    connectionRef.current = null;
+    setConnectionDraft(null);
+    setPanning(false);
+    unlockSelection();
   }
 
   function zoomBy(factor: number) {
-    setTransform((current) => ({ ...current, scale: Math.max(0.4, Math.min(1.8, current.scale * factor)) }));
+    setTransform((current) => ({ ...current, scale: Math.max(0.38, Math.min(1.8, current.scale * factor)) }));
   }
 
-  function onWheel(event: React.WheelEvent) {
+  function onWheel(event: React.WheelEvent<HTMLDivElement>) {
     event.preventDefault();
     zoomBy(event.deltaY < 0 ? 1.08 : 0.92);
   }
@@ -243,241 +252,223 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
     const minX = Math.min(...selected.map((node) => node.x));
     const minY = Math.min(...selected.map((node) => node.y));
     const maxX = Math.max(...selected.map((node) => node.x + node.width));
-    const maxY = Math.max(...selected.map((node) => node.y + DEFAULT_NODE_HEIGHT));
+    const maxY = Math.max(...selected.map((node) => node.y + NODE_HEIGHT));
     const width = Math.max(320, maxX - minX);
     const height = Math.max(220, maxY - minY);
-    const scale = Math.max(0.42, Math.min(1.25, Math.min((rect.width - 180) / width, (rect.height - 150) / height)));
-    const x = rect.width / 2 - (minX + width / 2) * scale;
-    const y = rect.height / 2 - (minY + height / 2) * scale;
-    setTransform({ scale, x, y });
+    const scale = Math.max(0.4, Math.min(1.2, Math.min((rect.width - 210) / width, (rect.height - 170) / height)));
+    setTransform({ scale, x: rect.width / 2 - (minX + width / 2) * scale, y: rect.height / 2 - (minY + height / 2) * scale });
   }
 
   function fitAll() {
     fitNodeIds(Array.from(visibleNodeIds));
   }
 
-  function focusIssue(issue: MissionIssue) {
-    setHighlightIds(new Set(issue.nodeIds));
-    setIssuesOpen(false);
-    setSelectedNodeId(null);
+  function createLink(from: number, to: number) {
+    if (from === to) return;
+    const exists = links.some((link) => (link.from === from && link.to === to) || (link.from === to && link.to === from));
+    if (exists) return;
+    const id = Math.max(199, ...links.map((link) => link.id)) + 1;
+    updateBoard(nodes, [...links, { id, from, to, type: "normal" }]);
+  }
+
+  function deleteLink(id: number) {
+    updateBoard(nodes, links.filter((link) => link.id !== id));
     setSelectedLinkId(null);
-    window.setTimeout(() => fitNodeIds(issue.nodeIds), 0);
   }
 
-  function addIssueSuggestion(issue: MissionIssue, suggestionIndex: number) {
-    const suggestion = issue.suggestions[suggestionIndex];
-    if (!suggestion) return;
-    const related = nodes.filter((node) => issue.nodeIds.includes(node.id));
-    const x = related.reduce((sum, node) => sum + node.x, 0) / Math.max(related.length, 1) + 300;
-    const y = related.reduce((sum, node) => sum + node.y, 0) / Math.max(related.length, 1) + 150;
-    const kickerKey = issue.key === "beneficiary" ? "nodes.beneficiaryKicker" : "nodes.resolutionKicker";
-    const newNode: MissionNode = { id: nextNodeId, x, y, width: 240, titleKey: suggestion.titleKey, kickerKey, state: "hypothesis", type: "suggestion", issueKey: issue.key };
-    const newLinks = issue.nodeIds.map((nodeId, index) => ({ id: nextLinkId + index, from: nodeId, to: nextNodeId, type: "suggestion" as const }));
-    setNodes((current) => [...current, newNode]);
-    setLinks((current) => [...current, ...newLinks]);
-    setNextNodeId((current) => current + 1);
-    setNextLinkId((current) => current + newLinks.length);
-    setHighlightIds(new Set([...issue.nodeIds, newNode.id]));
-    setIssuesOpen(false);
-    setPhaseClosed(false);
-    window.setTimeout(() => fitNodeIds([...issue.nodeIds, newNode.id]), 0);
+  function setNodeState(id: number, state: NodeState) {
+    updateBoard(nodes.map((node) => node.id === id ? { ...node, state } : node));
+    setNodeMenu(null);
   }
 
-  function generatedBranchKeys(node: MissionNode): string[] {
-    if (node.titleKey === "nodes.startTitle") return ["generated.detectNew", "generated.followFire"];
-    if (node.titleKey === "nodes.responseTitle") return ["generated.immediateAlert", "generated.periodicUpdate"];
-    if (node.titleKey === "nodes.coverageTitle") return ["generated.amazon", "generated.otherRegions"];
-    if (node.titleKey === "nodes.thermalTitle") return ["generated.thermalAnomaly", "generated.thermalVisual"];
-    return ["generated.exploreImpact", "generated.exploreAlternative"];
+  function setNodeBucket(id: number, bucket: NodeBucket) {
+    updateBoard(nodes.map((node) => node.id === id ? { ...node, bucket } : node));
+    setNodeMenu(null);
   }
 
-  function generatedQuestionKey(node: MissionNode): string {
-    if (node.titleKey === "nodes.responseTitle") return "generated.timeQuestion";
-    if (node.titleKey === "nodes.coverageTitle") return "generated.coverageQuestion";
-    if (node.titleKey === "nodes.thermalTitle") return "generated.thermalQuestion";
-    if (node.titleKey === "nodes.detectTitle") return "generated.detectionQuestion";
-    return "generated.genericQuestion";
+  function deleteNode(id: number) {
+    updateBoard(nodes.filter((node) => node.id !== id), links.filter((link) => link.from !== id && link.to !== id));
+    setNodeMenu(null);
+    setSelectedNodeId(null);
+  }
+
+  function addNode(title: string, bucket: NodeBucket = "ideas", parentId: number | null = null, kickerKey = "nodes.freeIdeaKicker") {
+    const id = Math.max(29, ...nodes.map((node) => node.id)) + 1;
+    const parent = parentId ? nodes.find((node) => node.id === parentId) : null;
+    const center = worldPoint((viewportRef.current?.getBoundingClientRect().left ?? 0) + (viewportRef.current?.clientWidth ?? 1000) / 2, (viewportRef.current?.getBoundingClientRect().top ?? 0) + (viewportRef.current?.clientHeight ?? 700) / 2);
+    const newNode: MissionNode = { id, x: parent ? parent.x : center.x - 120, y: parent ? parent.y + 210 : center.y - 55, width: 240, title: limitWords(title), kickerKey, state: "open", type: bucket === "questions" ? "question" : "normal", bucket };
+    const nextLinks = parentId ? [...links, { id: Math.max(199, ...links.map((link) => link.id)) + 1, from: parentId, to: id, type: "normal" as const }] : links;
+    updateBoard([...nodes, newNode], nextLinks);
+    setSelectedNodeId(id);
   }
 
   function addBranch(id: number) {
     const parent = nodes.find((node) => node.id === id);
     if (!parent) return;
-    const keys = generatedBranchKeys(parent);
-    const first: MissionNode = { id: nextNodeId, x: parent.x + parent.width + 120, y: parent.y - 30, width: 240, titleKey: keys[0], kickerKey: "nodes.possibilityKicker", state: "open", type: "normal" };
-    const second: MissionNode = { id: nextNodeId + 1, x: parent.x + parent.width + 120, y: parent.y + 150, width: 240, titleKey: keys[1], kickerKey: "nodes.possibilityKicker", state: "open", type: "normal" };
-    const firstLink: MissionLink = { id: nextLinkId, from: id, to: first.id, type: "normal" };
-    const secondLink: MissionLink = { id: nextLinkId + 1, from: id, to: second.id, type: "normal" };
-    setNodes((current) => [...current, first, second]);
-    setLinks((current) => [...current, firstLink, secondLink]);
-    setNextNodeId((current) => current + 2);
-    setNextLinkId((current) => current + 2);
+    const firstText = language === "pt" ? "Explorar uma consequência desta ideia" : "Explore one consequence of this idea";
+    const secondText = language === "pt" ? "Explorar uma interpretação alternativa" : "Explore an alternative interpretation";
+    const firstId = Math.max(29, ...nodes.map((node) => node.id)) + 1;
+    const secondId = firstId + 1;
+    const linkId = Math.max(199, ...links.map((link) => link.id)) + 1;
+    const first: MissionNode = { id: firstId, x: parent.x - 150, y: parent.y + 220, width: 240, title: firstText, kickerKey: "nodes.possibilityKicker", state: "open", type: "normal", bucket: "main" };
+    const second: MissionNode = { id: secondId, x: parent.x + 170, y: parent.y + 220, width: 240, title: secondText, kickerKey: "nodes.possibilityKicker", state: "open", type: "normal", bucket: "main" };
+    updateBoard([...nodes, first, second], [...links, { id: linkId, from: id, to: firstId, type: "normal" }, { id: linkId + 1, from: id, to: secondId, type: "normal" }]);
     setNodeMenu(null);
-    setPhaseClosed(false);
   }
 
   function addQuestion(id: number) {
-    const parent = nodes.find((node) => node.id === id);
-    if (!parent) return;
-    const node: MissionNode = { id: nextNodeId, x: parent.x + 60, y: parent.y + 180, width: 240, titleKey: generatedQuestionKey(parent), kickerKey: "nodes.questionKicker", state: "open", type: "question" };
-    const link: MissionLink = { id: nextLinkId, from: id, to: node.id, type: "normal" };
-    setNodes((current) => [...current, node]);
-    setLinks((current) => [...current, link]);
-    setNextNodeId((current) => current + 1);
-    setNextLinkId((current) => current + 1);
+    const title = language === "pt" ? "Que informação falta para decidir este ponto?" : "What information is missing to decide this point?";
+    addNode(title, "questions", id, "nodes.questionKicker");
     setNodeMenu(null);
-    setPhaseClosed(false);
   }
 
-  function createCheckpointHypothesis(key: string) {
-    const root = nodes.find((node) => node.type === "center");
-    if (!root) return;
-    const map: Record<string, { titleKey: string; kickerKey: string }> = {
-      problem: { titleKey: "generated.problemHypothesis", kickerKey: "nodes.problemKicker" },
-      result: { titleKey: "generated.resultHypothesis", kickerKey: "nodes.resultKicker" },
-      context: { titleKey: "generated.contextHypothesis", kickerKey: "nodes.contextKicker" },
-      beneficiary: { titleKey: "generated.beneficiaryHypothesis", kickerKey: "nodes.beneficiaryKicker" },
-      time: { titleKey: "generated.timeHypothesis", kickerKey: "nodes.timeKicker" },
-      constraints: { titleKey: "generated.constraintsHypothesis", kickerKey: "nodes.constraintKicker" }
-    };
-    const preset = map[key];
-    if (!preset) return;
-    const node: MissionNode = { id: nextNodeId, x: root.x + 430, y: root.y + 250, width: 240, titleKey: preset.titleKey, kickerKey: preset.kickerKey, state: "hypothesis", type: "suggestion" };
-    const link: MissionLink = { id: nextLinkId, from: root.id, to: node.id, type: "suggestion" };
-    setNodes((current) => [...current, node]);
-    setLinks((current) => [...current, link]);
-    setNextNodeId((current) => current + 1);
-    setNextLinkId((current) => current + 1);
-    setProgressOpen(false);
-    setHighlightIds(new Set([root.id, node.id]));
-    setPhaseClosed(false);
-    window.setTimeout(() => fitNodeIds([root.id, node.id]), 0);
-  }
-
-  function organizeHierarchy() {
-    const root = focusRootId !== null ? nodes.find((node) => node.id === focusRootId) : nodes.find((node) => node.type === "center");
-    if (!root) return;
-    const levels = new Map<number, number[]>();
-    const visited = new Set<number>([root.id]);
-    const queue: { id: number; depth: number }[] = [{ id: root.id, depth: 0 }];
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) break;
-      const level = levels.get(current.depth) ?? [];
-      level.push(current.id);
-      levels.set(current.depth, level);
-      for (const link of links) {
-        if (link.from === current.id && visibleNodeIds.has(link.to) && !visited.has(link.to)) {
-          visited.add(link.to);
-          queue.push({ id: link.to, depth: current.depth + 1 });
-        }
-      }
-    }
-
-    const remaining = Array.from(visibleNodeIds).filter((id) => !visited.has(id));
-    if (remaining.length > 0) levels.set(3, [...(levels.get(3) ?? []), ...remaining]);
-
-    setNodes((current) => current.map((node) => {
-      for (const [depth, ids] of levels) {
-        const index = ids.indexOf(node.id);
-        if (index >= 0) return { ...node, x: 260 + depth * 500, y: 180 + index * 210 };
-      }
-      return node;
-    }));
+  function organize() {
+    updateBoard(layoutTopDown(nodes, links, focusRootId, visibleNodeIds));
     window.setTimeout(fitAll, 0);
   }
 
-  function openNodeAsPage(id: number) {
+  function openPage(id: number) {
     setPageStack((current) => [...current, focusRootId]);
     setFocusRootId(id);
+    setDrawer(null);
     setNodeMenu(null);
-    setHighlightIds(new Set());
     setSelectedNodeId(null);
     setSelectedLinkId(null);
-    const ids = Array.from(getVisibleNodeIds(id, nodes, links));
-    window.setTimeout(() => fitNodeIds(ids), 0);
+    setHighlightIds(new Set());
+    window.setTimeout(() => fitNodeIds(Array.from(getVisibleNodeIds(id, nodes, links))), 0);
   }
 
   function backPage() {
-    const stack = [...pageStack];
-    const previous = stack.pop() ?? null;
-    setPageStack(stack);
+    const previous = pageStack.length > 0 ? pageStack[pageStack.length - 1] : null;
+    setPageStack((current) => current.slice(0, -1));
     setFocusRootId(previous);
+    setDrawer(null);
     setHighlightIds(new Set());
-    const ids = Array.from(getVisibleNodeIds(previous, nodes, links));
-    window.setTimeout(() => fitNodeIds(ids), 0);
+    window.setTimeout(() => fitNodeIds(Array.from(getVisibleNodeIds(previous, nodes, links))), 0);
   }
 
-  function openEdit(id: number) {
+  function openCardMenu(event: React.MouseEvent<HTMLButtonElement>, id: number) {
+    event.stopPropagation();
+    setSelectedNodeId(id);
+    setSelectedLinkId(null);
+    setNodeMenu({ id, x: Math.min(window.innerWidth - 260, event.clientX + 8), y: Math.min(window.innerHeight - 430, event.clientY + 8) });
+  }
+
+  function openNewCard() {
+    setEditingNodeId(null);
+    setCardText("");
+    setCardModalOpen(true);
+  }
+
+  function openEditCard(id: number) {
     const node = nodes.find((item) => item.id === id);
     if (!node) return;
     setEditingNodeId(id);
-    setIdeaText(resolveNodeTitle(node));
-    setIdeaModalOpen(true);
+    setCardText(resolveNodeTitle(node));
+    setCardModalOpen(true);
     setNodeMenu(null);
   }
 
-  function saveIdea() {
-    const limited = limitWords(ideaText);
-    if (!limited) return;
-
+  function saveCard() {
+    const text = limitWords(cardText);
+    if (!text) return;
     if (editingNodeId !== null) {
-      setNodes((current) => current.map((node) => node.id === editingNodeId ? { ...node, title: limited, titleKey: undefined } : node));
+      updateBoard(nodes.map((node) => node.id === editingNodeId ? { ...node, title: text, titleKey: undefined } : node));
     } else {
-      const viewport = viewportRef.current;
-      const rect = viewport?.getBoundingClientRect();
-      const x = rect ? (rect.width / 2 - transform.x) / transform.scale - 120 : 800;
-      const y = rect ? (rect.height / 2 - transform.y) / transform.scale - 50 : 500;
-      const node: MissionNode = { id: nextNodeId, x, y, width: 240, title: limited, kickerKey: "nodes.freeIdeaKicker", state: "open", type: "normal" };
-      setNodes((current) => [...current, node]);
-      if (focusRootId !== null) createLink(focusRootId, node.id);
-      setNextNodeId((current) => current + 1);
+      addNode(text, "ideas");
     }
-
-    setIdeaModalOpen(false);
-    setEditingNodeId(null);
-    setIdeaText("");
-    setPhaseClosed(false);
+    setCardModalOpen(false);
   }
 
-  function phaseValidationText(): string {
-    if (phaseClosed) return t("brainstorm.phaseClosedDescription");
-    if (phaseCanClose) return t("brainstorm.allRequired");
-    const missing = checkpoints.filter((checkpoint) => checkpoint.mandatory && checkpoint.state !== "defined");
-    const criticalCount = issues.filter((issue) => issue.severity === "critical").length;
-    const missingText = missing.length > 0 ? `${t("brainstorm.missingPrefix")} ${missing.map((checkpoint) => t(checkpoint.nameKey)).join(", ")}.` : "";
-    const issueText = criticalCount > 0 ? ` ${criticalCount} ${criticalCount === 1 ? t("brainstorm.criticalIssueSuffix") : t("brainstorm.criticalIssuesSuffix")}` : "";
-    return `${missingText}${issueText}`.trim();
+  function showIssue(issue: MissionIssue) {
+    setHighlightIds(new Set(issue.nodeIds));
+    setDrawer(null);
+    window.setTimeout(() => fitNodeIds(issue.nodeIds), 0);
   }
 
-  const issueLinkIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const issue of issues) {
-      for (const link of links) {
-        if ((issue.nodeIds.includes(link.from) || issue.nodeIds.includes(link.to)) && link.type === "normal") ids.add(link.id);
-      }
-    }
-    return ids;
-  }, [issues, links]);
+  function createStudy(issue: MissionIssue): IssueStudy {
+    const existing = project.studies.find((study) => study.issueKey === issue.key && study.scopeRootId === focusRootId);
+    if (existing) return existing;
+    return {
+      id: `study-${issue.key}-${focusRootId ?? "macro"}-${Date.now()}`,
+      issueKey: issue.key,
+      scopeRootId: focusRootId,
+      relatedNodeIds: issue.nodeIds,
+      hypotheses: issue.suggestions.map((suggestion, index) => ({ id: `seed-${issue.key}-${index}`, title: t(suggestion.titleKey), notes: t(suggestion.descriptionKey), status: "candidate" })),
+      notes: "",
+      conclusionHypothesisId: null,
+      status: "draft",
+      updatedAt: new Date().toISOString()
+    };
+  }
 
-  const selectedLink = links.find((link) => link.id === selectedLinkId);
-  const draftPath = connectionDraft ? (() => {
-    const source = nodes.find((node) => node.id === connectionDraft.from);
-    if (!source) return "";
-    const a = nodeCenter(source);
-    const midX = (a.x + connectionDraft.x) / 2;
-    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${connectionDraft.y}, ${connectionDraft.x} ${connectionDraft.y}`;
-  })() : "";
+  function openIssueStudy(issue: MissionIssue) {
+    const study = createStudy(issue);
+    if (!project.studies.some((item) => item.id === study.id)) updateProject({ studies: [...project.studies, study] });
+    setActiveStudyId(study.id);
+    setDrawer(null);
+  }
+
+  function changeStudy(study: IssueStudy) {
+    updateProject({ studies: project.studies.map((item) => item.id === study.id ? study : item) });
+  }
+
+  function resolveStudy(study: IssueStudy) {
+    const studies = project.studies.map((item) => item.id === study.id ? study : item);
+    const resolvedIssueKeys = project.resolvedIssueKeys.includes(study.issueKey) ? project.resolvedIssueKeys : [...project.resolvedIssueKeys, study.issueKey];
+    updateProject({ studies, resolvedIssueKeys });
+    setActiveStudyId(null);
+  }
+
+  function reopenStudy(study: IssueStudy) {
+    const next = { ...study, status: "draft" as const, conclusionHypothesisId: null, updatedAt: new Date().toISOString() };
+    updateProject({ studies: project.studies.map((item) => item.id === study.id ? next : item), resolvedIssueKeys: project.resolvedIssueKeys.filter((key) => key !== study.issueKey) });
+    setActiveStudyId(next.id);
+    setDrawer(null);
+  }
+
+  function setProgressMode(mode: MissionProject["progress"]["mode"]) {
+    updateProject({ progress: { ...project.progress, mode } });
+  }
+
+  function addCustomCriterion() {
+    const label = criterionName.trim();
+    if (!label || selectedNodeId === null) return;
+    const criterion: CustomProgressCriterion = { id: `criterion-${Date.now()}`, label, mandatory: criterionMandatory, evidenceNodeIds: [selectedNodeId], scopeRootId: focusRootId };
+    updateProject({ progress: { ...project.progress, mode: "custom", customCriteria: [...project.progress.customCriteria, criterion] } });
+    setCriterionName("");
+    setCriterionMandatory(true);
+  }
+
+  function removeCustomCriterion(id: string) {
+    updateProject({ progress: { ...project.progress, customCriteria: project.progress.customCriteria.filter((criterion) => criterion.id !== id) } });
+  }
+
+  function validatePhase() {
+    if (!macroCanClose || focusRootId !== null) return;
+    setPhaseClosed(true);
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if ((event.key === "Delete" || event.key === "Backspace") && selectedLinkId !== null && !(event.target as HTMLElement).matches("input,textarea")) {
+      event.preventDefault();
+      deleteLink(selectedLinkId);
+    }
+  }
+
+  const selectedNode = selectedNodeId !== null ? nodes.find((node) => node.id === selectedNodeId) ?? null : null;
+  const focusNode = focusRootId !== null ? nodes.find((node) => node.id === focusRootId) ?? null : null;
+  const nodeMenuNode = nodeMenu ? nodes.find((node) => node.id === nodeMenu.id) ?? null : null;
+  const issueNodeIds = new Set(scopedIssues.flatMap((issue) => issue.nodeIds));
 
   return (
-    <div className="brain-shell">
+    <div className="brain-shell brain-v2" onKeyDown={handleKeyDown} tabIndex={-1}>
       <aside className={sidebarOpen ? "brain-sidebar open" : "brain-sidebar"}>
-        <Brand />
+        <div className="sidebar-brand-row"><Brand /><button className="sidebar-close-mobile" onClick={() => setSidebarOpen(false)}>×</button></div>
         <nav className="brain-nav">
-          <button className="brain-nav-item" onClick={onHome}>⌂ <span>{t("home.start")}</span></button>
-          <button className="brain-nav-item" onClick={onHome}>▱ <span>{t("home.openProject")}</span></button>
-          <div className="brain-nav-section">{t("brainstorm.createMission").toUpperCase()}</div>
-          <button className="brain-nav-item active">◇ <span>{t("brainstorm.buildFromZero")}</span></button>
+          <button className="brain-nav-item" onClick={onHome}><span>⌂</span><span>{t("home.start")}</span></button>
+          <button className="brain-nav-item active" onClick={onBackSetup}><span>◇</span><span>{t("brainstorm.buildFromZero")}</span></button>
+          <div className="brain-nav-section">{t("home.createMission")}</div>
           <div className="step-list">
             <div className="step done"><span>01</span>{t("brainstorm.pointStart")}</div>
             <div className={phaseClosed ? "step active done" : "step active"}><span>02</span>{t("brainstorm.problem")}</div>
@@ -490,8 +481,10 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
             <div className="step"><span>09</span>{t("brainstorm.systemSoftware")}</div>
             <div className="step"><span>10</span>{t("brainstorm.review")}</div>
           </div>
-          <button className="brain-nav-item">▤ <span>{t("brainstorm.documentation")}</span></button>
-          <button className="brain-nav-item">⚙ <span>{t("brainstorm.settings")}</span></button>
+          <div className="brain-nav-section">{ux(language, "projectStructure")}</div>
+          <button className="brain-nav-item" onClick={() => { setDrawer("files"); setSidebarOpen(false); }}><span>▤</span><span>{ux(language, "files")}</span></button>
+          <button className="brain-nav-item" onClick={() => { setDrawer("studies"); setSidebarOpen(false); }}><span>⌁</span><span>{ux(language, "studies")}</span></button>
+          <button className="brain-nav-item"><span>□</span><span>{t("brainstorm.documentation")}</span></button>
         </nav>
         <div className="brain-sidebar-user"><UserBadge connectedLabel={t("common.connected")} /></div>
       </aside>
@@ -500,67 +493,215 @@ export function BrainstormPage({ language, t, onLanguageChange, onHome }: Props)
 
       <main className="brain-main">
         <header className="brain-topbar">
-          <div className="brain-top-left"><button className="mobile-menu" onClick={() => setSidebarOpen(true)}>☰</button><div className="breadcrumb"><span>{t("brainstorm.createMission")}</span><span>›</span><strong>{t("brainstorm.problem")}</strong>{focusRootId !== null && <><span>›</span><span>{resolveNodeTitle(nodes.find((node) => node.id === focusRootId) ?? nodes[0]).slice(0, 32)}</span></>}</div></div>
+          <div className="brain-top-left">
+            <button className="mobile-menu" onClick={() => setSidebarOpen(true)}>☰</button>
+            <div className="brain-breadcrumb"><span>{project.name}</span><span>›</span><strong>{focusNode ? resolveNodeTitle(focusNode) : t("brainstorm.problem")}</strong></div>
+          </div>
           <div className="brain-top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div>
         </header>
 
         <section className="brain-workspace">
           <div className="brain-title-row">
-            <div className="brain-title"><span>{t("brainstorm.phaseStep")}</span><h1>{t("brainstorm.room")}</h1></div>
-            <div className="brain-toolbar">
-              <button onClick={organizeHierarchy}>{t("brainstorm.organize")}</button>
-              <button className="issues-button" onClick={() => { setIssuesOpen(true); setProgressOpen(false); }}>{t("brainstorm.inconsistencies")} {issues.length}</button>
-              <button className="progress-button" onClick={() => { setProgressOpen(true); setIssuesOpen(false); }}><span>{t("brainstorm.missionDefinition")}</span><strong>{progress}%</strong><i><b style={{ width: `${progress}%` }} /></i></button>
-              <button className="primary" onClick={() => { setEditingNodeId(null); setIdeaText(""); setIdeaModalOpen(true); }}>{t("brainstorm.newIdea")}</button>
+            <div className="brain-title"><span>{ux(language, "problemPhase")}</span><h1>{ux(language, "conceptionRoom")}</h1></div>
+            <div className="brain-toolbar" data-control>
+              <button onClick={organize}>{ux(language, "organizeTopDown")}</button>
+              <button className={scopedIssues.length > 0 ? "issue-button" : ""} onClick={() => setDrawer("issues")}>{t("brainstorm.inconsistencies")} <b>{scopedIssues.length}</b></button>
+              <button className="progress-control" onClick={() => setDrawer("progress")}><span>{focusRootId === null ? ux(language, "projectProgress") : ux(language, "pageProgress")}</span><strong>{displayProgress}%</strong><i><em style={{ width: `${displayProgress}%` }} /></i></button>
+              <button className="primary" onClick={openNewCard}>{ux(language, "newIdea")}</button>
             </div>
           </div>
 
-          <div className="board-viewport" ref={viewportRef} onPointerDown={startPan} onWheel={onWheel}>
-            <div className="canvas-hint">{t("brainstorm.canvasHint")}</div>
-            {focusRootId !== null && <div className="focus-bar" data-control><button onClick={backPage}>{t("brainstorm.focusBack")}</button><span>{resolveNodeTitle(nodes.find((node) => node.id === focusRootId) ?? nodes[0])}</span></div>}
-            <div className="board-world" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
-              <svg className="board-lines" viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`}>
-                {links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to)).map((link) => <g key={link.id}><path className={`link-line ${link.type === "suggestion" ? "suggestion" : ""} ${issueLinkIds.has(link.id) ? "issue" : ""} ${selectedLinkId === link.id ? "selected" : ""}`} d={linkPath(link)} /><path className="link-hit" d={linkPath(link)} onPointerDown={(event) => { event.stopPropagation(); setSelectedLinkId(link.id); setSelectedNodeId(null); setHighlightIds(new Set()); }} /></g>)}
-                {issues.filter((issue) => issue.nodeIds.every((id) => visibleNodeIds.has(id))).map((issue) => issue.nodeIds.length > 1 ? <g key={`issue-${issue.key}`}><path className="issue-overlay" d={issuePath(issue)} /><path className="issue-hit" d={issuePath(issue)} onPointerDown={(event) => { event.stopPropagation(); focusIssue(issue); }} /></g> : null)}
-                {connectionDraft && <path className="draft-line" d={draftPath} />}
+          <div ref={viewportRef} className={panning ? "mission-canvas panning" : "mission-canvas"} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
+            <div className="canvas-hint">{ux(language, "dragHint")}</div>
+            {focusRootId !== null && <div className="focus-chip" data-control><button onClick={backPage}>← {ux(language, "back")}</button><span>{ux(language, "currentScope")}</span><strong>{focusNode ? resolveNodeTitle(focusNode) : ""}</strong></div>}
+
+            <div className="canvas-world" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`, width: WORLD_WIDTH, height: WORLD_HEIGHT }}>
+              <div className="bucket-guide ideas"><span>{ux(language, "freeIdeas")}</span></div>
+              <div className="bucket-guide questions"><span>{ux(language, "openQuestions")}</span></div>
+
+              <svg className="graph-lines" width={WORLD_WIDTH} height={WORLD_HEIGHT}>
+                {links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to)).map((link) => {
+                  const issueRelated = scopedIssues.some((issue) => issue.nodeIds.includes(link.from) || issue.nodeIds.includes(link.to));
+                  return (
+                    <g key={link.id}>
+                      <path className={`graph-line ${link.type === "suggestion" ? "suggestion" : ""} ${issueRelated ? "issue-related" : ""} ${selectedLinkId === link.id ? "selected" : ""}`} d={linkPath(link)} />
+                      <path className="graph-line-hit" d={linkPath(link)} onPointerDown={(event) => { event.stopPropagation(); setSelectedLinkId(link.id); setSelectedNodeId(null); setNodeMenu(null); }} />
+                    </g>
+                  );
+                })}
+                {scopedIssues.filter((issue) => issue.nodeIds.length > 1).map((issue) => (
+                  <g key={`issue-${issue.key}`}>
+                    <path className="issue-relation" d={issuePath(issue)} />
+                    <path className="issue-relation-hit" d={issuePath(issue)} onPointerDown={(event) => { event.stopPropagation(); openIssueStudy(issue); }} />
+                  </g>
+                ))}
+                {connectionDraft && (() => {
+                  const from = nodes.find((node) => node.id === connectionDraft.from);
+                  if (!from) return null;
+                  const a = nodeCenter(from);
+                  const midY = (a.y + connectionDraft.y) / 2;
+                  return <path className="connection-draft" d={`M ${a.x} ${a.y} C ${a.x} ${midY}, ${connectionDraft.x} ${midY}, ${connectionDraft.x} ${connectionDraft.y}`} />;
+                })()}
               </svg>
 
-              {nodes.filter((node) => visibleNodeIds.has(node.id)).map((node) => (
-                <article key={node.id} data-node-id={node.id} className={`board-node ${node.type ?? "normal"} state-${node.state} ${selectedNodeId === node.id ? "selected" : ""} ${highlightIds.has(node.id) ? "highlight" : ""} ${issues.some((issue) => issue.nodeIds.includes(node.id)) ? "problem" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={(event) => event.stopPropagation()} onClick={() => { if (connectionDraft && connectionDraft.from !== node.id) { createLink(connectionDraft.from, node.id); setConnectionDraft(null); } else { setSelectedNodeId(node.id); setSelectedLinkId(null); } }}>
-                  <header><button className="node-drag" onPointerDown={(event) => startNodeDrag(event, node.id)}>{t(node.kickerKey)}</button><button className="node-kebab" onClick={(event) => { event.stopPropagation(); setNodeMenu({ id: node.id, x: event.clientX, y: event.clientY }); }}>⋯</button></header>
-                  <div className="node-title">{resolveNodeTitle(node)}</div>
-                  <div className={`node-state ${node.state}`}>{stateLabel(node.state)}</div>
-                  <button className="connector left" aria-label="Connect" onPointerDown={(event) => startConnection(event, node.id)} />
-                  <button className="connector right" aria-label="Connect" onPointerDown={(event) => startConnection(event, node.id)} />
-                  <button className="connector top" aria-label="Connect" onPointerDown={(event) => startConnection(event, node.id)} />
-                  <button className="connector bottom" aria-label="Connect" onPointerDown={(event) => startConnection(event, node.id)} />
-                </article>
+              {visibleNodes.map((node) => (
+                <div key={node.id} data-node-id={node.id} className={`mission-node ${node.type ?? "normal"} ${node.bucket ?? "main"} ${node.state} ${selectedNodeId === node.id ? "selected" : ""} ${highlightIds.has(node.id) ? "highlight" : ""} ${issueNodeIds.has(node.id) ? "has-issue" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={(event) => startNodeDrag(event, node.id)}>
+                  <div className="mission-node-head"><span>{resolveKicker(node)}</span><button aria-label={ux(language, "cardMenu")} onClick={(event) => openCardMenu(event, node.id)}>⋯</button></div>
+                  <div className="mission-node-title">{resolveNodeTitle(node)}</div>
+                  <div className="mission-node-state"><i />{stateLabel(node.state)}</div>
+                  <button className="node-connector top" aria-label={ux(language, "connect")} onPointerDown={(event) => startConnection(event, node.id)} />
+                  <button className="node-connector right" aria-label={ux(language, "connect")} onPointerDown={(event) => startConnection(event, node.id)} />
+                  <button className="node-connector bottom" aria-label={ux(language, "connect")} onPointerDown={(event) => startConnection(event, node.id)} />
+                  <button className="node-connector left" aria-label={ux(language, "connect")} onPointerDown={(event) => startConnection(event, node.id)} />
+                </div>
               ))}
             </div>
 
-            {selectedLink && <div className="link-toolbar" data-control><span>{t("brainstorm.selectedConnection")}</span><button onClick={() => deleteLink(selectedLink.id)}>{t("common.delete")}</button></div>}
-            <div className="zoom-controls" data-control><button aria-label={t("brainstorm.zoomOut")} onClick={() => zoomBy(0.9)}>−</button><span>{Math.round(transform.scale * 100)}%</span><button aria-label={t("brainstorm.zoomIn")} onClick={() => zoomBy(1.1)}>+</button><button aria-label={t("brainstorm.fit")} onClick={fitAll}>⌂</button></div>
+            {selectedLinkId !== null && <div className="selected-link-toolbar" data-control><span>{ux(language, "connectionSelected")}</span><button onClick={() => deleteLink(selectedLinkId)}>{ux(language, "deleteConnection")}</button></div>}
 
-            <aside className={progressOpen ? "drawer visible" : "drawer"} data-panel>
-              <div className="drawer-head"><h2>{t("brainstorm.criteria")}</h2><button onClick={() => setProgressOpen(false)}>×</button></div>
-              {checkpoints.map((checkpoint) => <div className="checkpoint" key={checkpoint.key}><div className="checkpoint-title"><strong>{t(checkpoint.nameKey)}{checkpoint.mandatory ? " *" : ""}</strong><span className={checkpoint.state}>{stateLabel(checkpoint.state)}</span></div><p>{t(checkpoint.descriptionKey)}</p><div className="checkpoint-actions"><button onClick={() => { const ids = checkpoint.evidence.map((node) => node.id); setHighlightIds(new Set(ids)); setProgressOpen(false); if (ids.length > 0) window.setTimeout(() => fitNodeIds(ids), 0); }}>{t("brainstorm.showEvidence")}</button>{checkpoint.state !== "defined" && <button onClick={() => createCheckpointHypothesis(checkpoint.key)}>{t("brainstorm.createHypothesis")}</button>}</div></div>)}
-              <div className="phase-validation"><h3>{t("brainstorm.validation")}</h3><p>{phaseValidationText()}</p><button className="primary" disabled={!phaseCanClose || phaseClosed} onClick={() => { if (phaseCanClose) setPhaseClosed(true); }}>{phaseClosed ? t("brainstorm.validated") : t("brainstorm.closePhase")}</button></div>
-            </aside>
+            <div className="zoom-toolbar" data-control>
+              <button aria-label={ux(language, "zoomOut")} onClick={() => zoomBy(0.9)}>−</button>
+              <span>{Math.round(transform.scale * 100)}%</span>
+              <button aria-label={ux(language, "zoomIn")} onClick={() => zoomBy(1.1)}>+</button>
+              <button aria-label={ux(language, "fit")} onClick={fitAll}>⌂</button>
+            </div>
 
-            <aside className={issuesOpen ? "drawer visible" : "drawer"} data-panel>
-              <div className="drawer-head"><h2>{t("brainstorm.issuesAndGaps")}</h2><button onClick={() => setIssuesOpen(false)}>×</button></div>
-              {issues.length === 0 && <div className="empty-panel"><strong>{t("brainstorm.noIssues")}</strong><p>{t("brainstorm.noIssuesDescription")}</p></div>}
-              {issues.map((issue) => <div className="issue-card" key={issue.key}><button className="issue-main" onClick={() => focusIssue(issue)}><strong>{t(issue.titleKey)}</strong><span>{t(issue.descriptionKey)}</span></button><div className="issue-actions"><button onClick={() => focusIssue(issue)}>{t("brainstorm.showMap")}</button><button onClick={() => setExpandedIssue(expandedIssue === issue.key ? null : issue.key)}>{t("brainstorm.exploreSolutions")}</button></div>{expandedIssue === issue.key && <div className="suggestion-list">{issue.suggestions.map((suggestion, index) => <div className="suggestion-card" key={suggestion.titleKey}><strong>{t(suggestion.titleKey)}</strong><p>{t(suggestion.descriptionKey)}</p><button onClick={() => addIssueSuggestion(issue, index)}>{t("brainstorm.addAsHypothesis")}</button></div>)}</div>}</div>)}
-            </aside>
+            {drawer !== null && <button className="drawer-scrim" data-panel onClick={() => setDrawer(null)} aria-label={ux(language, "closePanel")} />}
+
+            {drawer === "issues" && (
+              <aside className="workspace-drawer" data-panel>
+                <header><div><small>{ux(language, "currentScope")}</small><h2>{t("brainstorm.issuesAndGaps")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
+                <p className="drawer-lead">{ux(language, "scopedIssues")}</p>
+                {scopedIssues.length === 0 && <div className="drawer-empty">{ux(language, "noScopedIssues")}</div>}
+                {scopedIssues.map((issue) => (
+                  <article className="issue-list-card" key={issue.key}>
+                    <div className="issue-severity">{issue.severity === "critical" ? "CRITICAL" : "GAP"}</div>
+                    <h3>{t(issue.titleKey)}</h3>
+                    <p>{t(issue.descriptionKey)}</p>
+                    <small>{ux(language, "openStudyFromIssue")}</small>
+                    <div className="drawer-card-actions"><button onClick={() => showIssue(issue)}>{t("brainstorm.showMap")}</button><button className="primary" onClick={() => openIssueStudy(issue)}>{ux(language, "exploreIssue")}</button></div>
+                  </article>
+                ))}
+              </aside>
+            )}
+
+            {drawer === "progress" && (
+              <aside className="workspace-drawer progress-drawer" data-panel>
+                <header><div><small>{focusRootId === null ? ux(language, "macroScope") : ux(language, "currentScope")}</small><h2>{t("brainstorm.criteria")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
+                <div className="progress-model-switch">
+                  <span>{ux(language, "progressModel")}</span>
+                  <div><button className={project.progress.mode === "standard" ? "active" : ""} onClick={() => setProgressMode("standard")}>{ux(language, "standardProgress")}</button><button className={project.progress.mode === "custom" ? "active" : ""} onClick={() => setProgressMode("custom")}>{ux(language, "customProgress")}</button></div>
+                  <p>{project.progress.mode === "standard" ? ux(language, "standardProgressDesc") : ux(language, "customProgressDesc")}</p>
+                </div>
+
+                {project.progress.mode === "standard" ? (
+                  <div className="criteria-list">
+                    {focusRootId !== null && <p className="drawer-lead">{ux(language, "pageStateProgress")}</p>}
+                    {standardCheckpoints.map((checkpoint) => (
+                      <div className="criterion-row" key={checkpoint.key}>
+                        <div><strong>{t(checkpoint.nameKey)}{checkpoint.mandatory ? " *" : ""}</strong><small>{t(checkpoint.descriptionKey)}</small></div>
+                        <span className={checkpoint.state}>{stateLabel(checkpoint.state)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="custom-progress-block">
+                    <div className="study-section-title">{ux(language, "customCriteria")}</div>
+                    {scopedCustomCriteria.length === 0 && <div className="drawer-empty">{ux(language, "noCustomCriteria")}</div>}
+                    {scopedCustomCriteria.map((criterion) => {
+                      const state = strongestStateForNodeIds(nodes, criterion.evidenceNodeIds);
+                      const evidence = nodes.filter((node) => criterion.evidenceNodeIds.includes(node.id));
+                      return (
+                        <div className="custom-criterion" key={criterion.id}>
+                          <div className="criterion-row"><div><strong>{criterion.label}{criterion.mandatory ? " *" : ""}</strong><small>{ux(language, "criterionEvidence")}: {evidence.map(resolveNodeTitle).join(", ")}</small></div><span className={state}>{stateLabel(state)}</span></div>
+                          <button onClick={() => removeCustomCriterion(criterion.id)}>{ux(language, "removeCriterion")}</button>
+                        </div>
+                      );
+                    })}
+                    <div className="criterion-builder">
+                      <input value={criterionName} placeholder={ux(language, "criterionPlaceholder")} onChange={(event) => setCriterionName(event.target.value)} />
+                      <label><input type="checkbox" checked={criterionMandatory} onChange={(event) => setCriterionMandatory(event.target.checked)} />{ux(language, "mandatory")}</label>
+                      <button className="technical-button" disabled={selectedNodeId === null || !criterionName.trim()} onClick={addCustomCriterion}>{ux(language, "addCriterionFromSelected")}</button>
+                      {selectedNode ? <small>{ux(language, "criterionEvidence")}: {resolveNodeTitle(selectedNode)}</small> : <small>{ux(language, "selectCardForCriterion")}</small>}
+                    </div>
+                  </div>
+                )}
+
+                {focusRootId === null && <div className="phase-validation-card"><h3>{t("brainstorm.validation")}</h3><p>{macroCanClose ? t("brainstorm.allRequired") : ux(language, "cannotClose")}</p><button className="technical-button primary" disabled={!macroCanClose || phaseClosed} onClick={validatePhase}>{phaseClosed ? ux(language, "validatedPhase") : ux(language, "validatePhase")}</button></div>}
+              </aside>
+            )}
+
+            {drawer === "files" && (
+              <aside className="workspace-drawer" data-panel>
+                <header><div><small>{ux(language, "autosaved")}</small><h2>{ux(language, "projectFiles")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
+                <p className="drawer-lead">{ux(language, "filesPanelDescription")}</p>
+                <div className="virtual-file-list">
+                  {files.map((file) => <div className="virtual-file" key={file.path}><span>FILE</span><div><strong>{file.path}</strong><small>{file.description}</small></div></div>)}
+                </div>
+                <div className="template-note"><strong>{ux(language, "standardTemplate")}</strong><p>{ux(language, "templateLocked")}</p></div>
+                <button className="technical-button primary export-button" onClick={() => exportProject(project)}>{ux(language, "exportProject")}</button>
+                <small className="export-hint">{ux(language, "exportHint")}</small>
+              </aside>
+            )}
+
+            {drawer === "studies" && (
+              <aside className="workspace-drawer" data-panel>
+                <header><div><small>{ux(language, "projectStructure")}</small><h2>{ux(language, "studies")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
+                {project.studies.length === 0 && <div className="drawer-empty">{ux(language, "noStudies")}</div>}
+                {project.studies.map((study) => {
+                  const issue = allIssues.find((item) => item.key === study.issueKey);
+                  return (
+                    <article className="study-list-card" key={study.id}>
+                      <span className={study.status}>{study.status === "resolved" ? ux(language, "studyResolved") : ux(language, "issueStudyDraft")}</span>
+                      <h3>{issue ? t(issue.titleKey) : study.issueKey}</h3>
+                      <small>{study.scopeRootId === null ? ux(language, "macroScope") : ux(language, "currentScope")}</small>
+                      <button className="technical-button" onClick={() => study.status === "resolved" ? reopenStudy(study) : setActiveStudyId(study.id)}>{study.status === "resolved" ? ux(language, "reopenStudy") : ux(language, "exploreIssue")}</button>
+                    </article>
+                  );
+                })}
+              </aside>
+            )}
           </div>
 
-          <footer className="brain-footer"><span>{phaseClosed ? t("brainstorm.phaseValidated") : t("brainstorm.canContinue")}</span><div><button>{t("common.back")}</button><button className="primary">{t("common.continue")} →</button></div></footer>
+          <footer className="brain-footer"><span>{phaseClosed ? ux(language, "validatedPhase") : t("brainstorm.canContinue")}</span><div><button onClick={onBackSetup}>{ux(language, "back")}</button><button className="primary">{t("common.continue")} →</button></div></footer>
         </section>
       </main>
 
-      {nodeMenu && <div className="node-menu" style={{ left: Math.min(nodeMenu.x + 8, window.innerWidth - 250), top: Math.min(nodeMenu.y + 8, window.innerHeight - 360) }} data-panel><span>{t("brainstorm.cardState")}</span><button onClick={() => setNodeState(nodeMenu.id, "defined")}>{t("common.defined")}</button><button onClick={() => setNodeState(nodeMenu.id, "hypothesis")}>{t("common.hypothesis")}</button><button onClick={() => setNodeState(nodeMenu.id, "open")}>{t("common.open")}</button><button onClick={() => setNodeState(nodeMenu.id, "closed")}>{t("common.closed")}</button><hr /><button onClick={() => openEdit(nodeMenu.id)}>{t("brainstorm.editText")}</button><button onClick={() => addBranch(nodeMenu.id)}>{t("brainstorm.branch")}</button><button onClick={() => addQuestion(nodeMenu.id)}>{t("brainstorm.question")}</button><button onClick={() => openNodeAsPage(nodeMenu.id)}>{t("brainstorm.openPage")}</button><hr /><button onClick={() => deleteNode(nodeMenu.id)}>{t("brainstorm.deleteCard")}</button></div>}
+      {nodeMenu && nodeMenuNode && (
+        <div className="node-menu-v2" style={{ left: nodeMenu.x, top: nodeMenu.y }} data-panel>
+          <div className="node-menu-label">{t("brainstorm.cardState")}</div>
+          <button onClick={() => setNodeState(nodeMenuNode.id, "defined")}>{t("common.defined")}</button>
+          <button onClick={() => setNodeState(nodeMenuNode.id, "hypothesis")}>{t("common.hypothesis")}</button>
+          <button onClick={() => setNodeState(nodeMenuNode.id, "open")}>{t("common.open")}</button>
+          <button onClick={() => setNodeState(nodeMenuNode.id, "closed")}>{t("common.closed")}</button>
+          <hr />
+          <button onClick={() => openEditCard(nodeMenuNode.id)}>{ux(language, "edit")}</button>
+          <button onClick={() => addBranch(nodeMenuNode.id)}>{t("brainstorm.branch")}</button>
+          <button onClick={() => addQuestion(nodeMenuNode.id)}>{t("brainstorm.question")}</button>
+          <button onClick={() => openPage(nodeMenuNode.id)}>{ux(language, "openAsPage")}</button>
+          <hr />
+          <button onClick={() => setNodeBucket(nodeMenuNode.id, "ideas")}>{ux(language, "moveToIdeas")}</button>
+          <button onClick={() => setNodeBucket(nodeMenuNode.id, "questions")}>{ux(language, "moveToQuestions")}</button>
+          <button onClick={() => setNodeBucket(nodeMenuNode.id, "main")}>{ux(language, "moveToMain")}</button>
+          <hr />
+          <button className="danger" onClick={() => deleteNode(nodeMenuNode.id)}>{t("brainstorm.deleteCard")}</button>
+        </div>
+      )}
 
-      {ideaModalOpen && <div className="modal-backdrop"><div className="idea-modal"><button className="modal-close" onClick={() => setIdeaModalOpen(false)}>×</button><h2>{editingNodeId !== null ? t("brainstorm.editIdeaTitle") : t("brainstorm.newIdeaTitle")}</h2><textarea value={ideaText} onChange={(event) => setIdeaText(limitWords(event.target.value))} placeholder={t("brainstorm.ideaPlaceholder")} /><div className="word-limit"><span>{t("brainstorm.maxWords")}</span><strong>{ideaText.trim() ? ideaText.trim().split(/\s+/).length : 0} / {MAX_CARD_WORDS}</strong></div><div className="modal-actions"><button onClick={() => setIdeaModalOpen(false)}>{t("common.cancel")}</button><button className="primary" onClick={saveIdea}>{t("common.save")}</button></div></div></div>}
+      {cardModalOpen && (
+        <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
+          <div className="idea-modal">
+            <button className="modal-close" onClick={() => setCardModalOpen(false)}>×</button>
+            <div className="modal-eyebrow">{editingNodeId !== null ? ux(language, "editCard") : ux(language, "newCard")}</div>
+            <h2>{ux(language, "cardText")}</h2>
+            <textarea rows={4} value={cardText} onChange={(event) => setCardText(limitWords(event.target.value))} />
+            <div className="word-limit"><span>{ux(language, "cardWords")}</span><strong>{cardText.trim() ? cardText.trim().split(/\s+/).length : 0} / {MAX_CARD_WORDS}</strong></div>
+            <div className="modal-actions"><button className="technical-button" onClick={() => setCardModalOpen(false)}>{ux(language, "cancel")}</button><button className="technical-button primary" onClick={saveCard}>{ux(language, "saveCard")}</button></div>
+          </div>
+        </div>
+      )}
+
+      {activeStudy && activeStudyIssue && <IssueStudyPanel language={language} issue={activeStudyIssue} nodes={nodes} study={activeStudy} t={t} resolveNodeTitle={resolveNodeTitle} onChange={changeStudy} onResolve={resolveStudy} onClose={() => setActiveStudyId(null)} />}
     </div>
   );
 }
