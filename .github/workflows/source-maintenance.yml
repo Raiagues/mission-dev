@@ -1,0 +1,41 @@
+name: Temporary source maintenance
+
+on:
+  push:
+    branches: [react-platform]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[source-maintenance]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: react-platform
+
+      - name: Apply narrow TypeScript fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/BrainstormPage.tsx')
+          text = path.read_text()
+          old = '    const pointerId = event.pointerId;\n    (event.currentTarget as HTMLElement).setPointerCapture(pointerId);'
+          new = '    const pointerId = event.pointerId;\n    const nodeWidth = node.width;\n    (event.currentTarget as HTMLElement).setPointerCapture(pointerId);'
+          text = text.replace(old, new, 1)
+          text = text.replace('WORLD_WIDTH - node.width, point.x - offsetX', 'WORLD_WIDTH - nodeWidth, point.x - offsetX', 1)
+          path.write_text(text)
+          PY
+
+      - name: Commit maintenance change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/BrainstormPage.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "[source-maintenance] Fix strict drag typing"
+          git push origin react-platform
