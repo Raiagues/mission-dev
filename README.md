@@ -3,67 +3,213 @@
 [![CI](https://github.com/Raiagues/mission-dev/actions/workflows/ci.yml/badge.svg)](https://github.com/Raiagues/mission-dev/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/Raiagues/mission-dev/actions/workflows/pages.yml/badge.svg)](https://github.com/Raiagues/mission-dev/actions/workflows/pages.yml)
 
-Mission Dev is a web platform for the conception and progressive development of satellite mission software. The product is being designed around an engineering-first workflow where mission decisions remain traceable, connected and technically coherent as the project evolves.
+Mission Dev is an engineering-first web platform for conceiving satellite missions and progressively developing the software architecture that supports them. The product is designed around a shared mission model where assumptions, decisions, inconsistencies, studies and validation evidence remain connected and traceable as the project evolves.
 
-The current prototype focuses on the earliest stage of a mission. Instead of forcing the user to define hardware or orbital choices before the problem is understood, the platform begins with a conception board that allows ideas, hypotheses, open questions, constraints and inconsistencies to be explored as a connected engineering model.
+Production
+
+`https://raiagues.github.io/mission-dev/`
 
 ## Platform status
 
 | Area | Status |
 | --- | --- |
-| Home and project entry | Available |
+| Aerospace blueprint home | Available |
 | Portuguese and English interface | Available |
 | Create mission from scratch | Available |
-| Interactive conception board | Available |
-| Hypotheses and open questions | Available |
-| Manual and automatic graph organization | Available |
-| Connection creation and removal | Available |
-| Inconsistency detection | Available |
-| Resolution hypotheses based on project context | Available |
-| Mission definition progress | Available |
-| Validation rules for the Problem phase | Available |
-| Focused sub-pages for a branch of the mission | Available |
+| Study Setup before conception | Available |
+| Interactive conception graph | Available |
+| Card drag, canvas pan and zoom | Available |
+| Top-to-bottom hierarchy organization | Available |
+| Free Ideas and Open Questions work areas | Available |
+| Focused graph pages | Available |
+| Scope-specific inconsistencies | Available |
+| Separate inconsistency study drafts | Available |
+| Standard mission-definition progress | Available |
+| Project-defined progress criteria | Available |
+| Evidence-driven phase validation | Available |
+| Local project persistence | Available |
+| Project JSON export | Available |
 | Desktop and mobile responsive interface | Available |
 | Open existing project | In development |
 | Import requirements | In development |
 | Structured entry for an existing mission | In development |
-| Documentation module | In development |
 | Persistent backend and authentication | Planned |
 
 ## Product principles
 
-- Problem before solution. The platform does not ask for antennas, payload configuration or CubeSat form factor while the mission is still being conceived.
-- Embedded engineering intelligence. Assistance is part of the decision system rather than a separate chat window.
-- Context is shared. Every node and connection contributes to the project context used to detect conflicts and propose hypotheses.
-- Decisions remain traceable. The user can see how ideas are connected, where assumptions exist and why a phase is not yet considered defined.
-- Progress is informative rather than restrictive. Users can continue exploring before a phase is closed, but a phase cannot be declared validated until its mandatory engineering criteria are satisfied.
-- Technical visual language. The interface uses an aerospace blueprint aesthetic with restrained technical drawing elements instead of a generic consumer application design.
+### Problem before solution
+
+The early flow does not ask the user to choose antennas, payload hardware, CubeSat size or orbit before the mission need is understood.
+
+### Embedded engineering intelligence
+
+Assistance is part of the decision model rather than a separate chatbot. The platform surfaces gaps, tensions and implications from the project context and prevents a phase from being declared validated when mandatory evidence is missing.
+
+### Shared context
+
+Cards, connections, study configuration, progress rules, inconsistency studies and project references belong to one versioned project model. A focused page changes the working scope without discarding the macro mission context.
+
+### Traceability
+
+An inconsistency is explored in a separate study draft. Hypotheses, notes and the adopted conclusion remain stored without automatically polluting the macro mission graph.
+
+### Tailorable definition
+
+Mission Dev provides a baseline definition framework, but projects can configure their own progress criteria and attach those criteria to explicit evidence in the graph.
+
+## Early mission flow
+
+```text
+Home
+  ↓
+Create project
+  ↓
+Build a mission from scratch
+  ↓
+Study Setup
+  ↓
+Conception Room
+  ↓
+Problem
+  ↓
+Context of use
+  ↓
+Objectives
+  ↓
+Mission concept
+  ↓
+Observation / Payload
+  ↓
+Platform
+  ↓
+Orbit and operations
+  ↓
+System and software
+  ↓
+Review
+```
+
+### Study Setup
+
+The intermediate Study Setup page defines how the study should be interpreted before the brainstorming graph opens. It captures the study intent, starting statement, mission-definition framework and project references without forcing implementation decisions.
+
+Supported study intents currently include problem-driven missions, technology demonstrations, science or exploration studies and open exploration.
+
+The engineering rationale for this flow is documented in [`docs/UX_RESEARCH.md`](docs/UX_RESEARCH.md).
+
+## Conception Room
+
+The conception room is a spatial engineering workspace rather than a chat interface.
+
+- Cards can be dragged directly.
+- The canvas can be panned and zoomed without selecting text.
+- Connections can be created from card handles and selected independently.
+- The automatic layout organizes the main hierarchy from top to bottom.
+- Cards can be moved into Free Ideas or Open Questions work areas.
+- Any branch can be opened as a focused page and later returned to the macro view.
+- Inconsistencies and progress are recalculated for the currently visible map.
+
+## Inconsistency studies
+
+Inconsistencies are not converted directly into new cards. Opening an inconsistency creates a separate study draft containing
+
+- the project evidence involved
+- candidate hypotheses
+- study notes and trade-offs
+- favored and rejected alternatives
+- an explicit adopted conclusion
+
+The main map is changed only through deliberate project decisions. A resolved study is stored in the project history and can be reopened.
+
+## Mission progress
+
+Mission Dev supports two progress models.
+
+### Standard
+
+The standard model derives progress from early mission evidence such as the core problem, desired result, context, beneficiary, time priority and major constraints.
+
+### Custom
+
+A project can define its own criteria. Custom criteria are connected to evidence cards instead of being manually checked off. Their state is derived from the state of the linked evidence.
+
+A phase cannot be validated merely by pressing a button. Mandatory criteria must have defined evidence and critical inconsistencies must be resolved.
+
+## Project model and export
+
+The current prototype persists the complete project in the browser as a versioned JSON model. The UI exposes the internal structure as virtual project files.
+
+```text
+/project.json
+/config/study.json
+/config/progress.json
+/boards/problem.json
+/studies/inconsistencies.json
+/templates/active.json
+```
+
+The project can be exported as a `.mission.json` file containing the study configuration, mission graph, progress model, inconsistency studies and template metadata.
+
+This structure is intentionally backend-ready. A future persistence layer can map the same objects to project storage without redesigning the product model.
+
+## Templates and standards
+
+The project model already separates template configuration from user-editable project content. This is intended to support future organization or regulatory templates where some phases, criteria or configuration paths are prescribed while selected fields remain editable.
+
+The architecture is compatible with project-specific tailoring rather than assuming one universal process for every CubeSat or mission class.
 
 ## Architecture
 
-The application is a client-side React application built with Vite. Mission-domain logic is kept separate from presentation so the conception model can later move behind an API without rewriting the interface.
+Mission Dev is a client-side React application built with TypeScript and Vite.
 
 ```mermaid
 flowchart LR
-    UI[React interface] --> I18N[PT / EN localization]
-    UI --> BOARD[Conception board]
-    BOARD --> MODEL[Mission domain model]
-    MODEL --> CHECKS[Definition criteria]
-    MODEL --> ISSUES[Consistency analysis]
-    MODEL --> GRAPH[Mission graph]
-    GRAPH --> FOCUS[Focused mission pages]
-    CHECKS --> UI
-    ISSUES --> UI
+    UI[React interface] --> SETUP[Study Setup]
+    SETUP --> STORE[Versioned project model]
+    UI --> BOARD[Conception graph]
+    BOARD --> STORE
+    STORE --> SCOPE[Focused graph scope]
+    SCOPE --> ISSUES[Consistency analysis]
+    SCOPE --> PROGRESS[Definition progress]
+    ISSUES --> STUDIES[Inconsistency study drafts]
+    STUDIES --> STORE
+    PROGRESS --> STORE
+    STORE --> EXPORT[mission.json export]
 ```
 
-`src/pages` contains the main product screens. `src/lib/missionModel.ts` contains deterministic engineering logic such as inconsistency detection, progress calculation, mandatory phase validation and focused graph traversal. `src/lib/i18n.ts` contains the Portuguese and English product vocabulary. `src/components` contains reusable interface elements. `tests` validates the mission model independently from the UI.
+### Main source areas
+
+```text
+src/
+├── components/
+│   ├── Brand.tsx
+│   ├── IssueStudyPanel.tsx
+│   ├── LanguageToggle.tsx
+│   └── UserBadge.tsx
+├── lib/
+│   ├── i18n.ts
+│   ├── missionModel.ts
+│   ├── projectStore.ts
+│   ├── types.ts
+│   └── uxCopy.ts
+├── pages/
+│   ├── HomePage.tsx
+│   ├── StudySetupPage.tsx
+│   └── BrainstormPage.tsx
+├── App.tsx
+├── main.tsx
+├── styles.css
+└── workspace.css
+```
+
+`missionModel.ts` contains deterministic graph, progress and consistency logic. `projectStore.ts` defines the versioned persistent project format, project seeding, virtual files and export. UI pages consume these models instead of embedding project state inside visual components.
 
 ## Technology stack
 
 - Node.js 22
 - React 19
-- TypeScript
-- Vite
+- TypeScript 5
+- Vite 7
 - Vitest
 - ESLint
 - GitHub Actions
@@ -71,31 +217,23 @@ flowchart LR
 
 ## Quality gates
 
-Every pull request and update to `main` runs the CI workflow. A change is accepted only after these checks pass.
+Every pull request targeting `main` runs
 
 ```text
 TypeScript typecheck
-ESLint
+ESLint with zero warnings
 Vitest unit tests
 Vite production build
 ```
 
-The deployment workflow repeats the complete quality gate before producing the GitHub Pages artifact. The deploy job only starts after the production build succeeds.
-
-## CI and CD
-
-`.github/workflows/ci.yml` runs on pull requests and pushes to `main` and validates types, lint rules, unit tests and the production build.
-
-`.github/workflows/pages.yml` runs on `main`, repeats the quality gate, packages only the `dist` directory and deploys the result to the `github-pages` environment.
-
-The Vite base path is `/mission-dev/` so JavaScript, CSS and application assets resolve correctly from the repository GitHub Pages URL.
+The production deployment repeats the full quality gate before generating the GitHub Pages artifact. After deploy, the workflow verifies the live page and its production JavaScript and CSS assets before publishing the deployment status as successful.
 
 ## Local development
 
 Requirements are Node.js 22 or newer and npm.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -105,82 +243,31 @@ Run the complete quality gate with
 npm run quality
 ```
 
-Individual checks are also available through `npm run typecheck`, `npm run lint`, `npm run test` and `npm run build`.
+Individual commands
 
-## Repository structure
-
-```text
-mission-dev/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── pages.yml
-├── src/
-│   ├── components/
-│   ├── lib/
-│   ├── pages/
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── styles.css
-├── tests/
-│   └── missionModel.test.ts
-├── eslint.config.js
-├── index.html
-├── package.json
-├── tsconfig.app.json
-├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run build
 ```
 
-## Current conception workflow
+## CI and CD
 
-1. Starting point
-2. Problem
-3. Use context
-4. Objectives
-5. Mission concept
-6. Observation and payload
-7. Platform
-8. Orbit and operations
-9. System and software
-10. Review
+`.github/workflows/ci.yml` runs quality checks on pull requests and changes to `main`.
 
-Only the Starting Point and Problem experience is currently implemented in depth. Later stages remain visible in the hierarchy so users understand where their current work fits within the complete mission development process.
-
-## Interface language
-
-The platform supports Portuguese and English. The selected language is stored in the browser and shared across screens. All current platform-controlled content has a translation in both languages. Free-form user content remains exactly as entered.
-
-## Design system
-
-The visual identity is based on aerospace engineering drawings rather than conventional consumer-product UI.
-
-- Dark navy technical grid
-- Thin blueprint construction lines
-- Restrained blue and white technical accents
-- Orthographic satellite technical drawings
-- Minimal shadows and decoration
-- Compact engineering typography
-- Visible hierarchy and traceability
-- Responsive layouts for desktop and mobile
-
-The home screen cycles between two technical orthographic satellite views implemented as vector engineering drawings. Future projects are intended to replace these generic views with drawings generated from the satellite configuration being developed by the user.
+`.github/workflows/pages.yml` creates the production build and deploys `dist` to GitHub Pages only after the quality gate passes. The live deployment is then checked before the workflow is considered successful.
 
 ## Roadmap
 
-- Persist conception boards and project history
-- Add the structured entry path for users who already have a mission definition
-- Implement use-context and objective stages
-- Expand consistency rules across mission stages
-- Introduce CubeSat configuration only after mission requirements justify platform decisions
-- Generate progressive technical drawings from the evolving mission architecture
-- Add requirements traceability
-- Introduce mission software architecture and subsystem views
-- Add team collaboration and role-based project access
-
-## Deployment
-
-Production is deployed through GitHub Actions to GitHub Pages from the `main` branch.
-
-`https://raiagues.github.io/mission-dev/`
+- backend project storage and authenticated workspaces
+- import and reopen `.mission.json` projects
+- project templates with locked and editable paths
+- ECSS and organization-specific applicability profiles
+- structured import of requirements and reference documents
+- deeper context and objective stages
+- mission-level trade studies and decision records
+- progressive CubeSat configuration only after mission needs justify platform decisions
+- generated technical satellite drawings driven by project configuration
+- requirements traceability into mission software architecture
+- team collaboration and role-based project access
