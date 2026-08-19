@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  statuses: write
 
 concurrency:
   group: github-pages
@@ -44,10 +45,10 @@ jobs:
           path: ./dist
 
   deploy:
-    name: Deploy production
+    name: Deploy and verify production
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -55,3 +56,52 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Verify live application
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import time
+          import urllib.parse
+          import urllib.request
+
+          page_url = os.environ["PAGE_URL"]
+          html = ""
+          last_error = None
+
+          for attempt in range(18):
+              try:
+                  request = urllib.request.Request(page_url, headers={"User-Agent": "mission-dev-deploy-check"})
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      html = response.read().decode("utf-8")
+                  if "<title>Mission Dev</title>" in html and 'id="root"' in html:
+                      break
+              except Exception as error:
+                  last_error = error
+              time.sleep(10)
+          else:
+              raise RuntimeError(f"Live page did not become healthy. Last error: {last_error}")
+
+          assets = re.findall(r'(?:src|href)="([^"]+\.(?:js|css))"', html)
+          if not assets:
+              raise RuntimeError("No JavaScript or CSS production assets were referenced by the live page.")
+
+          for asset in assets:
+              asset_url = urllib.parse.urljoin(page_url, asset)
+              request = urllib.request.Request(asset_url, headers={"User-Agent": "mission-dev-deploy-check"})
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  if response.status != 200:
+                      raise RuntimeError(f"Asset failed with HTTP {response.status}: {asset_url}")
+
+          print(f"Verified live page and {len(assets)} production assets at {page_url}")
+          PY
+
+      - name: Publish verified deployment status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=mission-dev/pages-live -f description="GitHub Pages deployed and live assets verified" -f target_url="${PAGE_URL}"
