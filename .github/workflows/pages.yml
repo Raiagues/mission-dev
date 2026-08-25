@@ -62,6 +62,7 @@ jobs:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           python - <<'PY'
+          import base64
           import os
           import re
           import time
@@ -71,10 +72,11 @@ jobs:
           page_url = os.environ["PAGE_URL"]
           html = ""
           last_error = None
+          headers = {"User-Agent": "mission-dev-deploy-check"}
 
           for attempt in range(18):
               try:
-                  request = urllib.request.Request(page_url, headers={"User-Agent": "mission-dev-deploy-check"})
+                  request = urllib.request.Request(page_url, headers=headers)
                   with urllib.request.urlopen(request, timeout=20) as response:
                       html = response.read().decode("utf-8")
                   if "<title>Mission Dev</title>" in html and 'id="root"' in html:
@@ -91,12 +93,24 @@ jobs:
 
           for asset in assets:
               asset_url = urllib.parse.urljoin(page_url, asset)
-              request = urllib.request.Request(asset_url, headers={"User-Agent": "mission-dev-deploy-check"})
+              request = urllib.request.Request(asset_url, headers=headers)
               with urllib.request.urlopen(request, timeout=20) as response:
                   if response.status != 200:
                       raise RuntimeError(f"Asset failed with HTTP {response.status}: {asset_url}")
 
-          print(f"Verified live page and {len(assets)} production assets at {page_url}")
+          satellite_assets = [f"satellites/sat-{index}.jpg.b64.txt" for index in range(1, 6)]
+          for asset in satellite_assets:
+              asset_url = urllib.parse.urljoin(page_url, asset)
+              request = urllib.request.Request(asset_url, headers=headers)
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  payload = response.read().decode("utf-8").strip()
+                  if response.status != 200:
+                      raise RuntimeError(f"Satellite artwork failed with HTTP {response.status}: {asset_url}")
+              decoded = base64.b64decode(payload, validate=True)
+              if not decoded.startswith(b"\xff\xd8\xff") or len(decoded) < 1000:
+                  raise RuntimeError(f"Satellite artwork is not a valid JPEG payload: {asset_url}")
+
+          print(f"Verified live page, {len(assets)} production assets and {len(satellite_assets)} satellite views at {page_url}")
           PY
 
       - name: Publish verified deployment status
