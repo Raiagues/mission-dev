@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { HomePage } from "./pages/HomePage";
 import { StudySetupPage } from "./pages/StudySetupPage";
-import { BrainstormPage } from "./pages/BrainstormPage";
+import { BrainstormPageFixed } from "./pages/BrainstormPageFixed";
 import { getStoredLanguage, resolveText, setStoredLanguage } from "./lib/i18n";
 import { loadProject, prepareProjectForConception, saveProject } from "./lib/projectStore";
 import type { MissionProject } from "./lib/projectStore";
@@ -56,7 +56,7 @@ export function App() {
     window.location.hash = "#/";
   }
 
-  if (route === "brainstorm") return <BrainstormPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={setProject} onHome={openHome} onBackSetup={openSetup} />;
+  if (route === "brainstorm") return <BrainstormPageFixed language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={setProject} onHome={openHome} onBackSetup={openSetup} />;
   if (route === "setup") return <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={setProject} onContinue={openBrainstorm} onHome={openHome} />;
   return <HomePage language={language} t={t} onLanguageChange={changeLanguage} onOpenBrainstorm={openSetup} />;
 }
