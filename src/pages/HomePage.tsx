@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Brand } from "../components/Brand";
 import { LanguageToggle } from "../components/LanguageToggle";
-import { SatelliteDrawing } from "../components/SatelliteDrawing";
 import { UserBadge } from "../components/UserBadge";
 import type { Language } from "../lib/types";
 
@@ -12,16 +11,43 @@ type Props = {
   onOpenBrainstorm: () => void;
 };
 
+const SATELLITE_FILES = [1, 2, 3, 4, 5].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.jpg.b64.txt`);
+
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [view, setView] = useState<0 | 1>(0);
+  const [view, setView] = useState(0);
+  const [satelliteImages, setSatelliteImages] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setView((current) => current === 0 ? 1 : 0), 5200);
-    return () => window.clearInterval(timer);
+    let active = true;
+
+    async function loadSatelliteImages() {
+      const images = await Promise.all(SATELLITE_FILES.map(async (file) => {
+        const response = await fetch(file);
+        if (!response.ok) throw new Error(`Unable to load ${file}`);
+        const base64 = (await response.text()).trim();
+        return `data:image/jpeg;base64,${base64}`;
+      }));
+
+      if (active) setSatelliteImages(images);
+    }
+
+    loadSatelliteImages().catch(() => {
+      if (active) setSatelliteImages([]);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (satelliteImages.length === 0) return;
+    const timer = window.setInterval(() => setView((current) => (current + 1) % satelliteImages.length), 5200);
+    return () => window.clearInterval(timer);
+  }, [satelliteImages.length]);
 
   useEffect(() => {
     if (!toast) return;
@@ -71,13 +97,17 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
             <p>{t("home.subtitle")}</p>
           </div>
 
-          <div className="sat-stage">
-            <div className={view === 0 ? "sat-view active" : "sat-view"}><SatelliteDrawing variant={0} /></div>
-            <div className={view === 1 ? "sat-view active" : "sat-view"}><SatelliteDrawing variant={1} /></div>
-            <div className="view-dots">
-              <button className={view === 0 ? "active" : ""} aria-label="View 1" onClick={() => setView(0)} />
-              <button className={view === 1 ? "active" : ""} aria-label="View 2" onClick={() => setView(1)} />
-            </div>
+          <div className="sat-stage image-stage">
+            {satelliteImages.map((image, index) => (
+              <div className={view === index ? "sat-view image-view active" : "sat-view image-view"} key={index}>
+                <img src={image} alt={`${t("common.appName")} technical satellite view ${index + 1}`} draggable={false} />
+              </div>
+            ))}
+            {satelliteImages.length > 0 && (
+              <div className="view-dots">
+                {satelliteImages.map((_, index) => <button className={view === index ? "active" : ""} aria-label={`View ${index + 1}`} onClick={() => setView(index)} key={index} />)}
+              </div>
+            )}
           </div>
 
           <div className="home-action-grid">
@@ -90,7 +120,7 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
       </main>
 
       {createOpen && (
-        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
+        <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
           <div className="start-modal">
             <button className="modal-close" onClick={() => setCreateOpen(false)}>×</button>
             <div className="modal-eyebrow">{t("home.createMission")}</div>
