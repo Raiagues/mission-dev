@@ -39,7 +39,8 @@ export function BrainstormPageFixed(props: Props) {
       if (!canvas || !world) return null;
 
       const canvasRect = canvas.getBoundingClientRect();
-      const matrix = new DOMMatrixReadOnly(getComputedStyle(world).transform === "none" ? undefined : getComputedStyle(world).transform);
+      const transformValue = getComputedStyle(world).transform;
+      const matrix = new DOMMatrixReadOnly(transformValue === "none" ? undefined : transformValue);
       const inverse = matrix.inverse();
       const local = new DOMPoint(clientX - canvasRect.left, clientY - canvasRect.top).matrixTransform(inverse);
       return { x: local.x, y: local.y };
@@ -58,9 +59,6 @@ export function BrainstormPageFixed(props: Props) {
       if (!node || !point) return;
 
       event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-
       drag = {
         pointerId: event.pointerId,
         nodeId,
