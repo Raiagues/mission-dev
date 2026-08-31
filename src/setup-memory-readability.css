@@ -100,37 +100,47 @@
   height: 40px;
 }
 
+.memory-reference-source-icon.pdf {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.memory-reference-source-icon.pdf img,
 .memory-reference-source-icon.pdf .memory-pdf-icon {
-  width: 38px;
-  height: 46px;
-  display: block;
-  overflow: visible;
+  display: none !important;
 }
 
-.memory-pdf-page {
-  fill: #f7f9fc;
-  stroke: #ec1c24;
-  stroke-width: 1.8;
-  stroke-linejoin: round;
+.memory-reference-source-icon.pdf::before {
+  content: "";
+  width: 31px;
+  height: 40px;
+  border: 2px solid #ec1c24;
+  border-radius: 2px;
+  background: #f7f9fc;
+  box-sizing: border-box;
+  clip-path: polygon(0 0, 72% 0, 100% 22%, 100% 100%, 0 100%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .18);
 }
 
-.memory-pdf-fold {
-  fill: none;
-  stroke: #ec1c24;
-  stroke-width: 1.8;
-  stroke-linejoin: round;
-}
-
-.memory-pdf-label {
-  fill: #ec1c24;
-}
-
-.memory-pdf-text {
-  fill: #ffffff;
+.memory-reference-source-icon.pdf::after {
+  content: "PDF";
+  position: absolute;
+  left: 50%;
+  top: 27px;
+  transform: translate(-50%, -50%);
+  min-width: 25px;
+  height: 13px;
+  border-radius: 2px;
+  background: #ec1c24;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
   font-family: Arial, sans-serif;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
-  letter-spacing: .03em;
+  letter-spacing: .02em;
+  line-height: 1;
 }
 
 .memory-reference-source-copy small {
