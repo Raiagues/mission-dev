@@ -41,7 +41,6 @@ function MenuIcon() {
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,8 +55,8 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
   }
 
   function openCreate() {
-    setCreateOpen(true);
     setSidebarOpen(false);
+    onOpenBrainstorm();
   }
 
   function toggleSidebar() {
@@ -110,20 +109,6 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
           </div>
         </section>
       </main>
-
-      {createOpen && (
-        <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
-          <div className="start-modal">
-            <button className="modal-close" onClick={() => setCreateOpen(false)}>×</button>
-            <div className="modal-eyebrow">{t("home.createMission")}</div>
-            <h2>{t("home.howStart")}</h2>
-            <div className="start-options">
-              <button className="start-option disabled" onClick={() => showDevelopment(t("home.existingMission"))}><span className="option-number">01</span><span><strong>{t("home.existingMission")}</strong><small>{t("home.existingMissionDescription")}</small></span><em>{t("common.inDevelopment")}</em></button>
-              <button className="start-option enabled" onClick={onOpenBrainstorm}><span className="option-number">02</span><span><strong>{t("home.buildFromZero")}</strong><small>{t("home.buildFromZeroDescription")}</small></span><span className="option-arrow">→</span></button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {toast && <div className="toast"><strong>{toast}</strong><span>{t("home.developmentMessage")}</span></div>}
     </div>
