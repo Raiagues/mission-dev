@@ -29,6 +29,38 @@
   align-items: stretch;
 }
 
+.home-shell {
+  transition: grid-template-columns 180ms ease;
+}
+
+.home-sidebar {
+  transition: transform 180ms ease, opacity 160ms ease;
+}
+
+.square-menu {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.square-menu .menu-icon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+}
+
+.square-menu:hover {
+  border-color: rgba(148, 204, 255, .68);
+  background: rgba(12, 40, 66, .72);
+}
+
+.square-menu:active {
+  transform: translateY(1px);
+}
+
 .nav-symbol {
   display: grid;
   place-items: center;
@@ -42,6 +74,25 @@
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.home-nav-item.unavailable,
+.home-nav-item:disabled {
+  color: rgba(159, 179, 198, .34);
+  background: rgba(0, 7, 13, .16);
+  border-left-color: transparent;
+  cursor: not-allowed;
+  opacity: .78;
+}
+
+.home-nav-item.unavailable:hover,
+.home-nav-item:disabled:hover {
+  background: rgba(0, 7, 13, .16);
+}
+
+.home-nav-item.unavailable .nav-symbol,
+.home-nav-item:disabled .nav-symbol {
+  color: rgba(118, 154, 188, .36);
 }
 
 .home-card-icon {
@@ -95,6 +146,23 @@
   border-color: rgba(110, 145, 178, 0.13);
 }
 
+@media (min-width: 761px) {
+  .home-shell.sidebar-collapsed {
+    grid-template-columns: 0 1fr;
+  }
+
+  .home-shell.sidebar-collapsed .home-sidebar {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .home-shell.sidebar-collapsed .home-main {
+    grid-column: 2;
+  }
+}
+
 @media (max-width: 1100px) {
   .home-hero-no-artwork {
     gap: 46px;
@@ -137,5 +205,15 @@
 
   .home-action-card {
     min-height: 142px;
+  }
+
+  .square-menu {
+    width: 42px;
+    height: 42px;
+  }
+
+  .square-menu .menu-icon {
+    width: 22px;
+    height: 22px;
   }
 }
