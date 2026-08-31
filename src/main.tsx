@@ -8,6 +8,7 @@ import "./home-artwork.css";
 import "./setup-memory-readability.css";
 import "./brainstorm-readability.css";
 import "./brainstorm-controls.css";
+import "./mission-sidebar.css";
 
 const root = document.getElementById("root");
 
