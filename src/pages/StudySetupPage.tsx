@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { Brand } from "../components/Brand";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
 import type { Language } from "../lib/types";
@@ -55,9 +53,7 @@ function LinkIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.2 13.8 8.8 15.2a3.1 3.1 0 0 1-4.4-4.4l2.5-2.5a3.1 3.1 0 0 1 4.4 0" /><path d="m13.8 10.2 1.4-1.4a3.1 3.1 0 1 1 4.4 4.4l-2.5 2.5a3.1 3.1 0 0 1-4.4 0" /><path d="m9.3 14.7 5.4-5.4" /></svg>;
 }
 
-export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHome }: Props) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
+export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Props) {
   const c = language === "pt" ? {
     eyebrow: "MEMÓRIA DO PROJETO",
     title: "Contexto e referências da missão",
@@ -72,9 +68,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     team: "EQUIPE",
     invite: "Convidar membro",
     unavailable: "Em desenvolvimento",
-    home: "Início",
-    continue: "Começar concepção",
-    pipeline: ["Memória do projeto", "Concepção", "Conceito da missão", "CubeSat", "Payload", "Órbita", "Comunicação", "Requisitos", "Software", "Revisão"]
+    continue: "Começar concepção"
   } : {
     eyebrow: "PROJECT MEMORY",
     title: "Mission context and references",
@@ -89,9 +83,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     team: "TEAM",
     invite: "Invite member",
     unavailable: "In development",
-    home: "Home",
-    continue: "Start conception",
-    pipeline: ["Project memory", "Conception", "Mission concept", "CubeSat", "Payload", "Orbit", "Communication", "Requirements", "Software", "Review"]
+    continue: "Start conception"
   };
 
   function sourceType(source: MockSource) {
@@ -100,25 +92,8 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
 
   return (
     <div className="setup-shell setup-shell-fixed memory-shell">
-      <aside className={sidebarOpen ? "setup-sidebar open memory-sidebar" : "setup-sidebar memory-sidebar"}>
-        <div className="setup-brand-row"><Brand /><button className="setup-sidebar-close" aria-label={t("common.close")} onClick={() => setSidebarOpen(false)}>×</button></div>
-        <button className="memory-home-link" onClick={onHome}><span>⌂</span>{c.home}</button>
-        <div className="memory-pipeline" aria-label={language === "pt" ? "Etapas da missão" : "Mission stages"}>
-          {c.pipeline.map((label, index) => (
-            <div className={index === 0 ? "memory-pipeline-item active" : "memory-pipeline-item future"} key={label}>
-              <span className="memory-pipeline-number">{String(index + 1).padStart(2, "0")}</span>
-              <span className="memory-pipeline-label">{label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="setup-sidebar-user"><UserBadge connectedLabel={t("common.connected")} /></div>
-      </aside>
-
-      <button className={sidebarOpen ? "sidebar-overlay visible" : "sidebar-overlay"} aria-label={t("common.close")} onClick={() => setSidebarOpen(false)} />
-
       <main className="setup-main setup-main-fixed memory-main">
         <header className="setup-topbar memory-topbar">
-          <button className="square-menu" aria-label={t("brainstorm.menu")} onClick={() => setSidebarOpen(true)}><span className="memory-menu-lines" /></button>
           <div className="top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div>
         </header>
 
