@@ -83,11 +83,8 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
         <section className="home-hero home-hero-no-artwork">
           <span className="tech-corner tl" /><span className="tech-corner tr" /><span className="tech-corner bl" /><span className="tech-corner br" />
           <div className="home-title">
-            <h1>{t("common.appName")}</h1>
-            <p>{t("home.subtitle")}</p>
+            <h1>ORBITAL</h1>
           </div>
-
-          <div className="home-hero-space" aria-hidden="true" />
 
           <div className="home-action-grid">
             <button className="home-action-card" onClick={openCreate}><span className="home-card-icon"><HomeIcon name="create" /></span><strong>{t("home.createProject")}</strong><small>{t("home.createProjectDescription")}</small></button>
