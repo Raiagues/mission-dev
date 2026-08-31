@@ -30,10 +30,7 @@
 }
 
 .brain-v2 .brain-title > span {
-  color: var(--brain-soft);
-  font-size: 12px;
-  font-weight: 520;
-  letter-spacing: .13em;
+  display: none;
 }
 
 .brain-v2 .brain-title h1 {
@@ -44,28 +41,28 @@
 }
 
 .brain-v2 .brain-toolbar {
-  gap: 9px;
+  gap: 11px;
 }
 
 .brain-v2 .brain-toolbar > button {
-  min-height: 44px;
-  padding: 0 16px;
-  color: #e8f3ff;
-  font-size: 12px;
-  font-weight: 500;
-  border-color: rgba(126, 183, 235, .36);
-  background: rgba(8, 30, 51, .78);
+  min-height: 52px;
+  padding: 0 21px;
+  color: #eef6ff;
+  font-size: 14px;
+  font-weight: 520;
+  border-color: rgba(126, 183, 235, .42);
+  background: rgba(8, 30, 51, .84);
 }
 
 .brain-v2 .brain-toolbar > button:hover {
-  border-color: rgba(126, 190, 255, .7);
-  background: rgba(15, 47, 78, .8);
+  border-color: rgba(126, 190, 255, .78);
+  background: rgba(15, 47, 78, .88);
 }
 
 .brain-v2 .brain-toolbar > button.primary {
-  border-color: rgba(97, 166, 255, .72);
-  background: rgba(38, 98, 160, .34);
-  box-shadow: 0 0 18px rgba(72, 147, 232, .08);
+  border-color: rgba(97, 166, 255, .82);
+  background: rgba(38, 98, 160, .42);
+  box-shadow: 0 0 20px rgba(72, 147, 232, .1);
 }
 
 .brain-v2 .mission-canvas {
@@ -77,12 +74,7 @@
 }
 
 .brain-v2 .canvas-hint {
-  left: 17px;
-  top: 15px;
-  color: rgba(184, 206, 227, .76);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .11em;
+  display: none;
 }
 
 .brain-v2 .bucket-guide span {
@@ -117,10 +109,10 @@
 }
 
 .brain-v2 .mission-node-head > button {
-  width: 32px;
-  height: 29px;
-  color: #b6cadc;
-  font-size: 18px;
+  width: 38px;
+  height: 34px;
+  color: #c4d7e9;
+  font-size: 20px;
 }
 
 .brain-v2 .mission-node-title {
@@ -155,6 +147,7 @@
 }
 
 .brain-v2 .brain-nav-item {
+  min-height: 46px;
   color: #c9d8e7;
   font-size: 13px;
 }
@@ -193,33 +186,55 @@
 }
 
 .brain-v2 .zoom-toolbar {
-  min-height: 44px;
-  color: #d9e7f4;
-  font-size: 12px;
-  background: rgba(5, 22, 38, .92);
-  border-color: rgba(126, 183, 235, .38);
+  min-height: 52px;
+  color: #e1edf8;
+  font-size: 13px;
+  background: rgba(5, 22, 38, .94);
+  border-color: rgba(126, 183, 235, .42);
 }
 
 .brain-v2 .zoom-toolbar button {
-  color: #e6f1fc;
-  font-size: 16px;
+  min-width: 46px;
+  min-height: 46px;
+  color: #edf6ff;
+  font-size: 19px;
 }
 
 .brain-v2 .selected-link-toolbar {
+  min-height: 48px;
   color: #dbe8f5;
-  font-size: 12px;
+  font-size: 13px;
   background: rgba(5, 22, 38, .94);
+}
+
+.brain-v2 .selected-link-toolbar button {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.brain-v2 .focus-chip button {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.brain-v2 .mobile-menu {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 20px;
 }
 
 .brain-v2 .node-menu-v2 {
   color: #dce9f5;
-  font-size: 12px;
+  font-size: 13px;
   background: rgba(4, 19, 34, .98);
 }
 
 .brain-v2 .node-menu-v2 button {
+  min-height: 38px;
   color: #dce9f5;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .brain-v2 .node-menu-label {
@@ -230,15 +245,15 @@
 }
 
 .brain-v2 .brain-footer {
-  min-height: 54px;
+  min-height: 58px;
   color: #b8cadb;
   font-size: 12px;
 }
 
 .brain-v2 .brain-footer button {
-  min-height: 38px;
-  padding: 0 14px;
-  font-size: 12px;
+  min-height: 46px;
+  padding: 0 20px;
+  font-size: 13px;
 }
 
 .brain-v2 .idea-modal h2 {
@@ -257,15 +272,20 @@
   font-size: 12px;
 }
 
+.brain-v2 .modal-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
 @media (max-width: 1100px) {
   .brain-v2 .brain-title h1 {
     font-size: 24px;
   }
 
   .brain-v2 .brain-toolbar > button {
-    min-height: 40px;
-    padding: 0 12px;
-    font-size: 11px;
+    min-height: 48px;
+    padding: 0 16px;
+    font-size: 13px;
   }
 }
 
@@ -288,16 +308,18 @@
     white-space: normal;
   }
 
-  .brain-v2 .brain-title > span {
-    font-size: 10px;
-  }
-
   .brain-v2 .brain-toolbar > button {
-    min-height: 42px;
-    font-size: 11px;
+    min-height: 48px;
+    padding: 0 15px;
+    font-size: 13px;
   }
 
   .brain-v2 .mission-node-title {
     font-size: 14px;
+  }
+
+  .brain-v2 .zoom-toolbar button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
