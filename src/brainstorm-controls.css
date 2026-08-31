@@ -1,13 +1,13 @@
 .brain-v2 .brain-toolbar > button {
-  min-height: 56px;
-  padding: 0 24px;
-  font-size: 14px;
-  font-weight: 560;
+  min-height: 46px;
+  padding: 0 17px;
+  font-size: 13px;
+  font-weight: 550;
   border-radius: 6px;
 }
 
 .brain-v2 .brain-toolbar > button.primary {
-  min-width: 132px;
+  min-width: 116px;
 }
 
 .brain-v2 .zoom-toolbar {
@@ -105,9 +105,9 @@
 
 @media (max-width: 1100px) {
   .brain-v2 .brain-toolbar > button {
-    min-height: 52px;
-    padding: 0 18px;
-    font-size: 13px;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 12px;
   }
 }
 
@@ -120,8 +120,8 @@
 
   .brain-v2 .brain-toolbar > button {
     width: 100%;
-    min-height: 54px;
-    font-size: 13px;
+    min-height: 48px;
+    font-size: 12px;
   }
 
   .brain-v2 .zoom-toolbar {
