@@ -21,6 +21,15 @@ body {
   isolation: isolate;
 }
 
+.image-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(42, 102, 160, .10), transparent 67%);
+  z-index: 2;
+}
+
 .image-stage .image-view {
   display: grid;
   place-items: center;
@@ -38,7 +47,8 @@ body {
   user-select: none;
   -webkit-user-drag: none;
   mix-blend-mode: screen;
-  filter: saturate(.9) contrast(1.08) brightness(1.06);
+  opacity: .46;
+  filter: grayscale(1) sepia(.18) saturate(1.15) hue-rotate(166deg) brightness(.92) contrast(1.06);
 }
 
 .image-stage .view-dots {
@@ -360,6 +370,10 @@ body {
     height: min(34vh, 270px);
     min-height: 190px;
     margin: 0;
+  }
+
+  .image-stage .image-view img {
+    opacity: .40;
   }
 
   .home-action-grid {

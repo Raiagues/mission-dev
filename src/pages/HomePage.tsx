@@ -11,7 +11,7 @@ type Props = {
   onOpenBrainstorm: () => void;
 };
 
-const SATELLITE_FILES = [1, 2, 3, 4, 5].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.jpg.b64.txt`);
+const SATELLITE_FILES = [1, 2, 3].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.jpg.b64.txt`);
 
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
