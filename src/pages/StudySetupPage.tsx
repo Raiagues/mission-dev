@@ -5,6 +5,7 @@ import { UserBadge } from "../components/UserBadge";
 import type { Language } from "../lib/types";
 import type { MissionProject, ProjectReference } from "../lib/projectStore";
 import "../setup-memory.css";
+import "../setup-memory-source-cards.css";
 
 type Props = {
   language: Language;
