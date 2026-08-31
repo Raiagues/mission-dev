@@ -67,7 +67,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
 
   const c = language === "pt" ? {
     eyebrow: "MEMÓRIA DO PROJETO",
-    title: "Traga tudo que já existe",
+    title: "Contexto e referências da missão",
     program: "PROGRAMA / COMPETIÇÃO",
     competition: "Olimpíada Brasileira de Satélites",
     cycle: "Ciclo 2026",
@@ -85,7 +85,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     pipeline: ["Memória do projeto", "Concepção", "Conceito da missão", "CubeSat", "Payload", "Órbita", "Comunicação", "Requisitos", "Software", "Revisão"]
   } : {
     eyebrow: "PROJECT MEMORY",
-    title: "Bring in everything that already exists",
+    title: "Mission context and references",
     program: "PROGRAM / COMPETITION",
     competition: "Brazilian Satellite Olympiad",
     cycle: "2026 Cycle",
