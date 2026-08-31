@@ -3,7 +3,6 @@ import { Brand } from "../components/Brand";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
 import { getVisibleNodeIds, layoutTopDown, limitWords, MAX_CARD_WORDS } from "../lib/missionModel";
-import { buildVirtualProjectFiles, exportProject } from "../lib/projectStore";
 import type { MissionProject } from "../lib/projectStore";
 import type { Language, MissionLink, MissionNode, NodeBucket, NodeState } from "../lib/types";
 import { ux } from "../lib/uxCopy";
@@ -19,7 +18,6 @@ type Props = {
 };
 
 type Transform = { scale: number; x: number; y: number };
-type Drawer = "files" | null;
 type NodeMenu = { id: number; x: number; y: number } | null;
 type PanState = { pointerId: number; startX: number; startY: number; originX: number; originY: number } | null;
 type ConnectionState = { from: number; pointerId: number; x: number; y: number } | null;
@@ -38,7 +36,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<number | null>(null);
   const [nodeMenu, setNodeMenu] = useState<NodeMenu>(null);
-  const [drawer, setDrawer] = useState<Drawer>(null);
   const [focusRootId, setFocusRootId] = useState<number | null>(null);
   const [pageStack, setPageStack] = useState<(number | null)[]>([]);
   const [connectionDraft, setConnectionDraft] = useState<ConnectionState>(null);
@@ -50,7 +47,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const links = project.board.links;
   const visibleNodeIds = useMemo(() => getVisibleNodeIds(focusRootId, nodes, links), [focusRootId, links, nodes]);
   const visibleNodes = useMemo(() => nodes.filter((node) => visibleNodeIds.has(node.id)), [nodes, visibleNodeIds]);
-  const files = useMemo(() => buildVirtualProjectFiles(project), [project]);
 
   function updateProject(patch: Partial<MissionProject>) {
     onProjectChange({ ...project, ...patch });
@@ -258,7 +254,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   function openPage(id: number) {
     setPageStack((current) => [...current, focusRootId]);
     setFocusRootId(id);
-    setDrawer(null);
     setNodeMenu(null);
     setSelectedNodeId(null);
     setSelectedLinkId(null);
@@ -269,7 +264,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     const previous = pageStack.length > 0 ? pageStack[pageStack.length - 1] : null;
     setPageStack((current) => current.slice(0, -1));
     setFocusRootId(previous);
-    setDrawer(null);
     window.setTimeout(() => fitNodeIds(Array.from(getVisibleNodeIds(previous, nodes, links))), 0);
   }
 
@@ -333,8 +327,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
             <div className="step"><span>09</span>{t("brainstorm.systemSoftware")}</div>
             <div className="step"><span>10</span>{t("brainstorm.review")}</div>
           </div>
-          <div className="brain-nav-section">{ux(language, "projectStructure")}</div>
-          <button className="brain-nav-item" onClick={() => { setDrawer("files"); setSidebarOpen(false); }}><span>▤</span><span>{ux(language, "files")}</span></button>
           <button className="brain-nav-item"><span>□</span><span>{t("brainstorm.documentation")}</span></button>
         </nav>
         <div className="brain-sidebar-user"><UserBadge connectedLabel={t("common.connected")} /></div>
@@ -353,7 +345,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
 
         <section className="brain-workspace">
           <div className="brain-title-row">
-            <div className="brain-title"><span>{ux(language, "problemPhase")}</span><h1>{ux(language, "conceptionRoom")}</h1></div>
+            <div className="brain-title"><h1>{ux(language, "conceptionRoom")}</h1></div>
             <div className="brain-toolbar" data-control>
               <button onClick={organize}>{ux(language, "organizeTopDown")}</button>
               <button className="primary" onClick={openNewCard}>{ux(language, "newIdea")}</button>
@@ -361,7 +353,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
           </div>
 
           <div ref={viewportRef} className={panning ? "mission-canvas panning" : "mission-canvas"} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
-            <div className="canvas-hint">{ux(language, "dragHint")}</div>
             {focusRootId !== null && <div className="focus-chip" data-control><button onClick={backPage}>← {ux(language, "back")}</button><span>{ux(language, "currentScope")}</span><strong>{focusNode ? resolveNodeTitle(focusNode) : ""}</strong></div>}
 
             <div className="canvas-world" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`, width: WORLD_WIDTH, height: WORLD_HEIGHT }}>
@@ -405,21 +396,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
               <button aria-label={ux(language, "zoomIn")} onClick={() => zoomBy(1.1)}>+</button>
               <button aria-label={ux(language, "fit")} onClick={fitAll}>⌂</button>
             </div>
-
-            {drawer !== null && <button className="drawer-scrim" data-panel onClick={() => setDrawer(null)} aria-label={ux(language, "closePanel")} />}
-
-            {drawer === "files" && (
-              <aside className="workspace-drawer" data-panel>
-                <header><div><small>{ux(language, "autosaved")}</small><h2>{ux(language, "projectFiles")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
-                <p className="drawer-lead">{ux(language, "filesPanelDescription")}</p>
-                <div className="virtual-file-list">
-                  {files.map((file) => <div className="virtual-file" key={file.path}><span>FILE</span><div><strong>{file.path}</strong><small>{file.description}</small></div></div>)}
-                </div>
-                <div className="template-note"><strong>{ux(language, "standardTemplate")}</strong><p>{ux(language, "templateLocked")}</p></div>
-                <button className="technical-button primary export-button" onClick={() => exportProject(project)}>{ux(language, "exportProject")}</button>
-                <small className="export-hint">{ux(language, "exportHint")}</small>
-              </aside>
-            )}
           </div>
 
           <footer className="brain-footer"><span>{t("brainstorm.canContinue")}</span><div><button onClick={onBackSetup}>{ux(language, "back")}</button><button className="primary">{t("common.continue")} →</button></div></footer>
