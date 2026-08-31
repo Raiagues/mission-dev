@@ -65,11 +65,6 @@
   font-size: 12px;
 }
 
-.memory-program-meta span:first-child {
-  min-height: 29px;
-  padding: 0 10px;
-}
-
 .memory-program-connected {
   min-height: 48px;
   margin-right: 8px;
