@@ -20,37 +20,85 @@
 }
 
 .memory-program-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-  padding-top: 18px;
-  padding-bottom: 18px;
+  height: 154px;
+  min-height: 154px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 14px 20px 16px;
+}
+
+.memory-program-label {
+  align-self: start;
 }
 
 .memory-program-row {
   min-height: 0;
+  height: 100%;
+  align-items: center;
+  gap: 18px;
 }
 
-.memory-program-copy > strong {
-  color: #f5f9ff;
-  font-size: 20px;
-  font-weight: 560;
+.memory-program-badge {
+  width: 78px;
+  height: 78px;
 }
 
-.memory-program-meta {
-  color: #c2d2e3;
-  font-size: 12px;
-}
-
-.memory-program-connected {
-  color: #dbe8f5;
-  font-size: 12px;
+.memory-program-badge span {
+  font-size: 19px;
 }
 
 .memory-program-badge strong {
   color: #ffffff;
-  font-size: 14px;
+  font-size: 15px;
+}
+
+.memory-program-copy > strong {
+  color: #f5f9ff;
+  font-size: 21px;
+  font-weight: 560;
+}
+
+.memory-program-meta {
+  margin-top: 10px;
+  color: #c2d2e3;
+  font-size: 12px;
+}
+
+.memory-program-meta span:first-child {
+  min-height: 29px;
+  padding: 0 10px;
+}
+
+.memory-program-connected {
+  min-height: 48px;
+  margin-right: 8px;
+  padding: 0 16px;
+  color: #dbe8f5;
+  font-size: 12px;
+  box-shadow: 0 0 0 14px rgba(2, 12, 28, .46);
+}
+
+.memory-program-connected i {
+  width: 21px;
+  height: 21px;
+}
+
+.memory-reference-source-icon {
+  width: 44px;
+  height: 50px;
+}
+
+.memory-reference-source-icon img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  display: block;
+}
+
+.memory-reference-source-icon.repository img {
+  width: 40px;
+  height: 40px;
 }
 
 .memory-reference-source-copy small {
@@ -137,18 +185,28 @@
   }
 
   .memory-program-card {
-    gap: 7px;
-    padding-top: 12px;
-    padding-bottom: 12px;
+    height: 132px;
+    min-height: 132px;
+    padding: 11px 16px 13px;
+  }
+
+  .memory-program-badge {
+    width: 66px;
+    height: 66px;
   }
 
   .memory-program-copy > strong {
-    font-size: 17px;
+    font-size: 18px;
   }
 
   .memory-program-meta,
   .memory-program-connected {
     font-size: 10px;
+  }
+
+  .memory-program-connected {
+    min-height: 42px;
+    box-shadow: 0 0 0 10px rgba(2, 12, 28, .46);
   }
 
   .memory-reference-source-copy strong,
@@ -168,9 +226,23 @@
   }
 
   .memory-program-card {
-    gap: 8px;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    height: auto;
+    min-height: 154px;
+    padding: 14px;
+  }
+
+  .memory-program-row {
+    min-height: 112px;
+  }
+
+  .memory-program-badge {
+    width: 60px;
+    height: 60px;
+  }
+
+  .memory-program-connected {
+    margin: 4px 0 0;
+    box-shadow: none;
   }
 
   .memory-reference-source-copy strong {
