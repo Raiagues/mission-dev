@@ -34,8 +34,13 @@ function HomeIcon({ name }: { name: IconName }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5h6.5A2.5 2.5 0 0 1 13 7v13a3 3 0 0 0-3-3H4z" /><path d="M20 4.5h-6.5A2.5 2.5 0 0 0 11 7v13a3 3 0 0 1 3-3h6z" /></svg>;
 }
 
+function MenuIcon() {
+  return <svg className="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>;
+}
+
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -55,16 +60,27 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
     setSidebarOpen(false);
   }
 
+  function toggleSidebar() {
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setSidebarOpen((current) => !current);
+      return;
+    }
+
+    setSidebarCollapsed((current) => !current);
+  }
+
+  const shellClass = sidebarCollapsed ? "home-shell sidebar-collapsed" : "home-shell";
+
   return (
-    <div className="home-shell">
+    <div className={shellClass}>
       <aside className={sidebarOpen ? "home-sidebar open" : "home-sidebar"}>
         <Brand />
         <nav className="home-nav">
           <button className="home-nav-item active"><span className="nav-symbol"><HomeIcon name="home" /></span><span>{t("home.start")}</span></button>
           <button className="home-nav-item" onClick={openCreate}><span className="nav-symbol"><HomeIcon name="create" /></span><span>{t("home.createProject")}</span></button>
-          <button className="home-nav-item" onClick={() => showDevelopment(t("home.openProject"))}><span className="nav-symbol"><HomeIcon name="folder" /></span><span>{t("home.openProject")}</span></button>
-          <button className="home-nav-item" onClick={() => showDevelopment(t("home.importRequirements"))}><span className="nav-symbol"><HomeIcon name="import" /></span><span>{t("home.importRequirements")}</span></button>
-          <button className="home-nav-item" onClick={() => showDevelopment(t("home.documentation"))}><span className="nav-symbol"><HomeIcon name="docs" /></span><span>{t("home.documentation")}</span></button>
+          <button className="home-nav-item unavailable" disabled title={t("home.developmentMessage")}><span className="nav-symbol"><HomeIcon name="folder" /></span><span>{t("home.openProject")}</span></button>
+          <button className="home-nav-item unavailable" disabled title={t("home.developmentMessage")}><span className="nav-symbol"><HomeIcon name="import" /></span><span>{t("home.importRequirements")}</span></button>
+          <button className="home-nav-item unavailable" disabled title={t("home.developmentMessage")}><span className="nav-symbol"><HomeIcon name="docs" /></span><span>{t("home.documentation")}</span></button>
         </nav>
         <div className="home-sidebar-user"><UserBadge connectedLabel={t("common.connected")} /></div>
       </aside>
@@ -73,7 +89,7 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
 
       <main className="home-main">
         <header className="home-topbar">
-          <button className="square-menu" aria-label={t("brainstorm.menu")} onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="square-menu" aria-label={t("brainstorm.menu")} aria-expanded={sidebarOpen || !sidebarCollapsed} onClick={toggleSidebar}><MenuIcon /></button>
           <div className="top-actions">
             <LanguageToggle language={language} onChange={onLanguageChange} />
             <UserBadge connectedLabel={t("common.connected")} />
