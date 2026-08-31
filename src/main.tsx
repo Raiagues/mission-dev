@@ -4,6 +4,7 @@ import { App } from "./App";
 import "./styles.css";
 import "./workspace.css";
 import "./polish.css";
+import "./home-artwork.css";
 
 const root = document.getElementById("root");
 
