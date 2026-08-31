@@ -63,7 +63,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     title: "Contexto e referências da missão",
     program: "PROGRAMA / COMPETIÇÃO",
     competition: "Olimpíada Brasileira de Satélites",
-    cycle: "Ciclo 2026",
     deadline: "Prazo final: 18/09/2026",
     connected: "Conectado",
     sources: "FONTES E ARTEFATOS CONECTADOS",
@@ -81,7 +80,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     title: "Mission context and references",
     program: "PROGRAM / COMPETITION",
     competition: "Brazilian Satellite Olympiad",
-    cycle: "2026 Cycle",
     deadline: "Final deadline: 18/09/2026",
     connected: "Connected",
     sources: "CONNECTED SOURCES AND ARTIFACTS",
@@ -136,7 +134,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
               <div className="memory-program-badge"><span>✦</span><strong>OBSAT</strong></div>
               <div className="memory-program-copy">
                 <strong>{c.competition}</strong>
-                <div className="memory-program-meta"><span>▣ {c.cycle}</span><span>◷ {c.deadline}</span></div>
+                <div className="memory-program-meta"><span>◷ {c.deadline}</span></div>
               </div>
               <div className="memory-program-connected"><i>✓</i>{c.connected}</div>
             </div>
