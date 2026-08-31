@@ -43,13 +43,13 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
     <>
       <aside className={expanded ? "mission-sidebar expanded" : "mission-sidebar collapsed"}>
         <div className="mission-sidebar-header">
-          <Brand />
+          {expanded && <Brand />}
           <button className="mission-sidebar-toggle" onClick={onToggle} aria-label={expanded ? (language === "pt" ? "Recolher barra lateral" : "Collapse sidebar") : (language === "pt" ? "Expandir barra lateral" : "Expand sidebar")} aria-expanded={expanded}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d={expanded ? "m12.5 5-5 5 5 5" : "m7.5 5 5 5-5 5"} /></svg>
           </button>
         </div>
 
-        <button className="mission-sidebar-home" onClick={onHome} title={!expanded ? homeLabel : undefined}>
+        <button className={currentStep === null ? "mission-sidebar-home active" : "mission-sidebar-home"} onClick={onHome} title={!expanded ? homeLabel : undefined}>
           <span className="mission-sidebar-home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10.5V20h13v-9.5" /></svg></span>
           <span className="mission-sidebar-home-label">{homeLabel}</span>
         </button>
