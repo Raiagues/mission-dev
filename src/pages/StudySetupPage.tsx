@@ -18,8 +18,9 @@ type Props = {
 };
 
 type MockSource = {
-  type: "pdf" | "repository" | "document" | "sheet";
+  type: "pdf" | "repository" | "document" | "csv";
   label: string;
+  iconSrc: string;
 };
 
 type MockMember = {
@@ -30,10 +31,10 @@ type MockMember = {
 };
 
 const mockSources: MockSource[] = [
-  { type: "pdf", label: "Edital_OBSAT_2026.pdf" },
-  { type: "repository", label: "equipe-aurora/cansat-2025" },
-  { type: "document", label: "Relatório final 2025" },
-  { type: "sheet", label: "Lições aprendidas" }
+  { type: "pdf", label: "Edital_OBSAT_2026.pdf", iconSrc: "https://cdn.simpleicons.org/adobeacrobatreader/EC1C24" },
+  { type: "repository", label: "equipe-aurora/cansat-2025", iconSrc: "https://cdn.simpleicons.org/github/FFFFFF" },
+  { type: "document", label: "Relatório final 2025", iconSrc: "https://cdn.simpleicons.org/googledocs/4285F4" },
+  { type: "csv", label: "Lições_aprendidas.csv", iconSrc: "https://cdn.simpleicons.org/googlesheets/34A853" }
 ];
 
 const mockMembers: MockMember[] = [
@@ -42,20 +43,8 @@ const mockMembers: MockMember[] = [
   { initials: "BI", name: "Bianca", rolePt: "Engenheira de Estruturas", roleEn: "Structures Engineer" }
 ];
 
-function SourceIcon({ type }: { type: MockSource["type"] }) {
-  if (type === "repository") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6a9.4 9.4 0 0 0-3 18.3c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.2.7-1.5-2.2-.3-4.6-1.1-4.6-4.7 0-1 .4-1.9 1-2.5-.1-.3-.4-1.3.1-2.5 0 0 .8-.3 2.6 1a9 9 0 0 1 4.8 0c1.8-1.2 2.6-1 2.6-1 .5 1.2.2 2.2.1 2.5.7.7 1 1.5 1 2.5 0 3.6-2.4 4.4-4.6 4.7.4.3.7.9.7 1.7v2.5c0 .3.2.6.7.5A9.4 9.4 0 0 0 12 2.6Z" /></svg>;
-  }
-
-  if (type === "sheet") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.8h8l4 4V21H6z" /><path d="M14 2.8V7h4M8.5 11h7M8.5 14h7M8.5 17h7M11 10v8" /></svg>;
-  }
-
-  if (type === "pdf") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.8h8l4 4V21H6z" /><path d="M14 2.8V7h4" /><path d="M8 16.8v-5h2a1.5 1.5 0 0 1 0 3H8M12.7 16.8v-5h1.4c1.7 0 2.8.9 2.8 2.5s-1.1 2.5-2.8 2.5z" /></svg>;
-  }
-
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.8h8l4 4V21H6z" /><path d="M14 2.8V7h4M8.5 11h7M8.5 14h7M8.5 17h5" /></svg>;
+function SourceIcon({ source }: { source: MockSource }) {
+  return <img src={source.iconSrc} alt="" aria-hidden="true" />;
 }
 
 function LinkIcon() {
@@ -154,7 +143,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
             <div className="memory-reference-sources-grid">
               {mockSources.map((source) => (
                 <article className="memory-reference-source-card" key={source.label}>
-                  <div className={`memory-reference-source-icon ${source.type}`}><SourceIcon type={source.type} /></div>
+                  <div className={`memory-reference-source-icon ${source.type}`}><SourceIcon source={source} /></div>
                   <div className="memory-reference-source-copy">
                     <small>{sourceType(source)}</small>
                     <strong>{source.label}</strong>
