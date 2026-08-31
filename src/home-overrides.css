@@ -1,0 +1,99 @@
+.home-hero-no-artwork {
+  grid-template-rows: auto minmax(140px, 1fr) auto;
+}
+
+.home-hero-space {
+  min-height: 140px;
+}
+
+.nav-symbol {
+  display: grid;
+  place-items: center;
+}
+
+.nav-symbol svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-card-icon {
+  width: 62px;
+  height: 62px;
+}
+
+.home-card-icon svg {
+  width: 54px;
+  height: 54px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-action-card.disabled {
+  background: rgba(1, 10, 18, 0.78);
+  border-color: rgba(121, 157, 190, 0.16);
+  color: rgba(220, 232, 243, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.home-action-card.disabled::before,
+.home-action-card.disabled::after {
+  border-color: rgba(116, 151, 183, 0.22);
+  opacity: 0.38;
+}
+
+.home-action-card.disabled .home-card-icon {
+  color: rgba(132, 174, 214, 0.46);
+}
+
+.home-action-card.disabled small {
+  color: rgba(153, 174, 194, 0.52);
+}
+
+.home-action-card.disabled em {
+  color: rgba(141, 164, 186, 0.55);
+  border-color: rgba(112, 145, 176, 0.16);
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.home-action-card.disabled:hover {
+  background: rgba(1, 10, 18, 0.78);
+  border-color: rgba(121, 157, 190, 0.16);
+}
+
+@media (max-width: 1100px) {
+  .home-hero-no-artwork {
+    grid-template-rows: auto minmax(90px, 1fr) auto;
+  }
+
+  .home-hero-space {
+    min-height: 90px;
+  }
+}
+
+@media (max-width: 760px) {
+  .home-hero-no-artwork {
+    grid-template-rows: auto minmax(36px, 0.35fr) auto;
+  }
+
+  .home-hero-space {
+    min-height: 36px;
+  }
+
+  .home-card-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .home-card-icon svg {
+    width: 38px;
+    height: 38px;
+  }
+}
