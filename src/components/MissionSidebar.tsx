@@ -37,19 +37,19 @@ function LockIcon() {
 
 export function MissionSidebar({ language, currentStep, expanded, connectedLabel, homeLabel, onToggle, onHome, onStepSelect }: Props) {
   const phaseLabels = labels[language];
-  const stateWords = language === "pt" ? { complete: "Concluída", current: "Atual", locked: "Bloqueada" } : { complete: "Complete", current: "Current", locked: "Locked" };
+  const stateWords = language === "pt" ? { complete: "Concluída", current: "Fase atual", locked: "Ainda não disponível" } : { complete: "Complete", current: "Current phase", locked: "Not available yet" };
 
   return (
     <>
-      <aside className={expanded ? "mission-sidebar expanded" : "mission-sidebar collapsed"}>
+      <aside className={expanded ? "mission-sidebar expanded" : "mission-sidebar collapsed"} aria-label={language === "pt" ? "Navegação da missão" : "Mission navigation"}>
         <div className="mission-sidebar-header">
           {expanded && <Brand />}
-          <button className="mission-sidebar-toggle" onClick={onToggle} aria-label={expanded ? (language === "pt" ? "Recolher barra lateral" : "Collapse sidebar") : (language === "pt" ? "Expandir barra lateral" : "Expand sidebar")} aria-expanded={expanded}>
+          <button className="mission-sidebar-toggle" type="button" onClick={onToggle} aria-label={expanded ? (language === "pt" ? "Recolher barra lateral" : "Collapse sidebar") : (language === "pt" ? "Expandir barra lateral" : "Expand sidebar")} aria-expanded={expanded}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d={expanded ? "m12.5 5-5 5 5 5" : "m7.5 5 5 5-5 5"} /></svg>
           </button>
         </div>
 
-        <button className={currentStep === null ? "mission-sidebar-home active" : "mission-sidebar-home"} onClick={onHome} title={!expanded ? homeLabel : undefined}>
+        <button className={currentStep === null ? "mission-sidebar-home active" : "mission-sidebar-home"} type="button" onClick={onHome} title={!expanded ? homeLabel : undefined}>
           <span className="mission-sidebar-home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10.5V20h13v-9.5" /></svg></span>
           <span className="mission-sidebar-home-label">{homeLabel}</span>
         </button>
@@ -64,9 +64,10 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
             const state = complete ? "complete" : current ? "current" : "locked";
             const clickable = complete;
             const stateLabel = stateWords[state];
+            const tooltip = `${String(step + 1).padStart(2, "0")} · ${label} · ${stateLabel}`;
 
             return (
-              <button className={`mission-phase ${state}`} key={label} disabled={!clickable} onClick={() => clickable && onStepSelect(step)} title={!expanded ? `${String(step + 1).padStart(2, "0")} · ${label} · ${stateLabel}` : undefined}>
+              <button className={`mission-phase ${state}`} key={label} type="button" aria-current={current ? "step" : undefined} aria-disabled={!clickable} tabIndex={clickable ? 0 : -1} onClick={() => clickable && onStepSelect(step)} title={!expanded ? tooltip : undefined}>
                 <span className="mission-phase-rail" />
                 <span className="mission-phase-icon">
                   <PhaseIcon step={step} />
@@ -84,7 +85,7 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
 
         <div className="mission-sidebar-user"><UserBadge connectedLabel={connectedLabel} compact={!expanded} /></div>
       </aside>
-      <button className={expanded ? "mission-sidebar-overlay visible" : "mission-sidebar-overlay"} aria-label={language === "pt" ? "Recolher barra lateral" : "Collapse sidebar"} onClick={onToggle} />
+      <button className={expanded ? "mission-sidebar-overlay visible" : "mission-sidebar-overlay"} type="button" aria-label={language === "pt" ? "Recolher barra lateral" : "Collapse sidebar"} onClick={onToggle} />
     </>
   );
 }
