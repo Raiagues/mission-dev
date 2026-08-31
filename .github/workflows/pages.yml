@@ -62,7 +62,6 @@ jobs:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           python - <<'PY'
-          import base64
           import os
           import re
           import time
@@ -73,14 +72,6 @@ jobs:
           html = ""
           last_error = None
           headers = {"User-Agent": "mission-dev-deploy-check"}
-
-          def normalize_base64(payload):
-              clean = re.sub(r"\s+", "", payload)
-              padding = clean.find("=")
-              if padding < 0:
-                  return clean
-              padding_length = 2 if padding + 1 < len(clean) and clean[padding + 1] == "=" else 1
-              return clean[:padding + padding_length]
 
           for attempt in range(18):
               try:
@@ -106,19 +97,21 @@ jobs:
                   if response.status != 200:
                       raise RuntimeError(f"Asset failed with HTTP {response.status}: {asset_url}")
 
-          satellite_assets = [f"satellites/sat-{index}.jpg.b64.txt" for index in range(1, 4)]
+          satellite_assets = [f"satellites/sat-{index}.webp" for index in range(1, 4)]
           for asset in satellite_assets:
               asset_url = urllib.parse.urljoin(page_url, asset)
               request = urllib.request.Request(asset_url, headers=headers)
               with urllib.request.urlopen(request, timeout=20) as response:
-                  payload = normalize_base64(response.read().decode("utf-8"))
+                  payload = response.read()
+                  content_type = response.headers.get("Content-Type", "")
                   if response.status != 200:
                       raise RuntimeError(f"Satellite artwork failed with HTTP {response.status}: {asset_url}")
-              decoded = base64.b64decode(payload, validate=True)
-              if not decoded.startswith(b"\xff\xd8\xff") or len(decoded) < 1000:
-                  raise RuntimeError(f"Satellite artwork is not a valid JPEG payload: {asset_url}")
+              if len(payload) < 1000 or not payload.startswith(b"RIFF") or payload[8:12] != b"WEBP":
+                  raise RuntimeError(f"Satellite artwork is not a valid WebP asset: {asset_url}")
+              if "image/webp" not in content_type.lower():
+                  raise RuntimeError(f"Satellite artwork has unexpected content type {content_type}: {asset_url}")
 
-          print(f"Verified live page, {len(assets)} production assets and {len(satellite_assets)} approved satellite views at {page_url}")
+          print(f"Verified live page, {len(assets)} production assets and {len(satellite_assets)} user-provided satellite views at {page_url}")
           PY
 
       - name: Publish verified deployment status
