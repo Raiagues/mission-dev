@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { MissionSidebar } from "./components/MissionSidebar";
 import { HomePage } from "./pages/HomePage";
 import { StudySetupPage } from "./pages/StudySetupPage";
@@ -7,6 +7,7 @@ import { getStoredLanguage, resolveText, setStoredLanguage } from "./lib/i18n";
 import { loadProject, prepareProjectForConception, saveProject } from "./lib/projectStore";
 import type { MissionProject } from "./lib/projectStore";
 import type { Language } from "./lib/types";
+import "./mission-sidebar.css";
 
 type Route = "home" | "setup" | "brainstorm";
 
@@ -35,6 +36,15 @@ export function App() {
     const timer = window.setTimeout(() => saveProject(project), 180);
     return () => window.clearTimeout(timer);
   }, [project]);
+
+  useLayoutEffect(() => {
+    const legacySelectors = [".app-page .home-sidebar", ".app-page .setup-sidebar", ".app-page .brain-sidebar", ".app-page .sidebar-overlay", ".app-page .square-menu", ".app-page .mobile-menu"];
+    const legacyElements = document.querySelectorAll<HTMLElement>(legacySelectors.join(","));
+    legacyElements.forEach((element) => {
+      element.style.setProperty("display", "none", "important");
+      element.setAttribute("aria-hidden", "true");
+    });
+  }, [route]);
 
   const t = useMemo(() => (path: string) => resolveText(language, path), [language]);
   const currentStep = route === "setup" ? 0 : route === "brainstorm" ? 1 : null;
