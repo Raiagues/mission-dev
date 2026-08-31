@@ -19,6 +19,19 @@
   letter-spacing: .09em;
 }
 
+.memory-program-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.memory-program-row {
+  min-height: 0;
+}
+
 .memory-program-copy > strong {
   color: #f5f9ff;
   font-size: 20px;
@@ -123,6 +136,12 @@
     font-size: 31px !important;
   }
 
+  .memory-program-card {
+    gap: 7px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
   .memory-program-copy > strong {
     font-size: 17px;
   }
@@ -146,6 +165,12 @@
 @media (max-width: 760px) {
   .memory-reference-heading h1 {
     font-size: 29px !important;
+  }
+
+  .memory-program-card {
+    gap: 8px;
+    padding-top: 16px;
+    padding-bottom: 16px;
   }
 
   .memory-reference-source-copy strong {
