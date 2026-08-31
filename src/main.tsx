@@ -7,6 +7,7 @@ import "./polish.css";
 import "./home-artwork.css";
 import "./setup-memory-readability.css";
 import "./brainstorm-readability.css";
+import "./brainstorm-controls.css";
 
 const root = document.getElementById("root");
 
