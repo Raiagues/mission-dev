@@ -31,7 +31,7 @@ type MockMember = {
 };
 
 const mockSources: MockSource[] = [
-  { type: "pdf", label: "Edital_OBSAT_2026.pdf", iconSrc: "https://cdn.simpleicons.org/adobeacrobatreader/EC1C24" },
+  { type: "pdf", label: "Edital_OBSAT_2026.pdf", iconSrc: "" },
   { type: "repository", label: "equipe-aurora/cansat-2025", iconSrc: "https://cdn.simpleicons.org/github/FFFFFF" },
   { type: "document", label: "Relatório final 2025", iconSrc: "https://cdn.simpleicons.org/googledocs/4285F4" },
   { type: "csv", label: "Lições_aprendidas.csv", iconSrc: "https://cdn.simpleicons.org/googlesheets/34A853" }
@@ -44,6 +44,10 @@ const mockMembers: MockMember[] = [
 ];
 
 function SourceIcon({ source }: { source: MockSource }) {
+  if (source.type === "pdf") {
+    return <svg className="memory-pdf-icon" viewBox="0 0 40 48" aria-hidden="true"><path className="memory-pdf-page" d="M7 2.5h19l7 7V45.5H7z" /><path className="memory-pdf-fold" d="M26 2.5v7h7" /><rect className="memory-pdf-label" x="10" y="24" width="20" height="12" rx="2" /><text className="memory-pdf-text" x="20" y="32.6" textAnchor="middle">PDF</text></svg>;
+  }
+
   return <img src={source.iconSrc} alt="" aria-hidden="true" />;
 }
 
