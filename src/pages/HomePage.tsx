@@ -11,51 +11,18 @@ type Props = {
   onOpenBrainstorm: () => void;
 };
 
-const SATELLITE_FILES = [1, 2, 3].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.jpg.b64.txt`);
-
-function normalizeBase64(payload: string) {
-  const clean = payload.replace(/\s+/g, "");
-  const firstPadding = clean.indexOf("=");
-  if (firstPadding < 0) return clean;
-  const paddingLength = clean[firstPadding + 1] === "=" ? 2 : 1;
-  return clean.slice(0, firstPadding + paddingLength);
-}
+const SATELLITE_FILES = [1, 2, 3].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.webp`);
 
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [view, setView] = useState(0);
-  const [satelliteImages, setSatelliteImages] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadSatelliteImages() {
-      const images = await Promise.all(SATELLITE_FILES.map(async (file) => {
-        const response = await fetch(file);
-        if (!response.ok) throw new Error(`Unable to load ${file}`);
-        const base64 = normalizeBase64(await response.text());
-        return `data:image/jpeg;base64,${base64}`;
-      }));
-
-      if (active) setSatelliteImages(images);
-    }
-
-    loadSatelliteImages().catch(() => {
-      if (active) setSatelliteImages([]);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (satelliteImages.length === 0) return;
-    const timer = window.setInterval(() => setView((current) => (current + 1) % satelliteImages.length), 5200);
+    const timer = window.setInterval(() => setView((current) => (current + 1) % SATELLITE_FILES.length), 5200);
     return () => window.clearInterval(timer);
-  }, [satelliteImages.length]);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -106,16 +73,14 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
           </div>
 
           <div className="sat-stage image-stage">
-            {satelliteImages.map((image, index) => (
-              <div className={view === index ? "sat-view image-view active" : "sat-view image-view"} key={index}>
+            {SATELLITE_FILES.map((image, index) => (
+              <div className={view === index ? "sat-view image-view active" : "sat-view image-view"} key={image}>
                 <img src={image} alt={`${t("common.appName")} technical satellite view ${index + 1}`} draggable={false} />
               </div>
             ))}
-            {satelliteImages.length > 0 && (
-              <div className="view-dots">
-                {satelliteImages.map((_, index) => <button className={view === index ? "active" : ""} aria-label={`View ${index + 1}`} onClick={() => setView(index)} key={index} />)}
-              </div>
-            )}
+            <div className="view-dots">
+              {SATELLITE_FILES.map((_, index) => <button className={view === index ? "active" : ""} aria-label={`View ${index + 1}`} onClick={() => setView(index)} key={index} />)}
+            </div>
           </div>
 
           <div className="home-action-grid">
