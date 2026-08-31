@@ -68,7 +68,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
   const c = language === "pt" ? {
     eyebrow: "MEMÓRIA DO PROJETO",
     title: "Traga tudo que já existe",
-    lead: "Conecte fontes e evidências para construir a memória inicial do projeto.",
     program: "PROGRAMA / COMPETIÇÃO",
     competition: "Olimpíada Brasileira de Satélites",
     cycle: "Ciclo 2026",
@@ -82,14 +81,11 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     invite: "Convidar membro",
     unavailable: "Em desenvolvimento",
     home: "Início",
-    nextPhase: "PRÓXIMA FASE · 02",
     continue: "Começar concepção",
-    continueHelp: "A memória reunida aqui será usada como contexto durante a concepção da missão.",
     pipeline: ["Memória do projeto", "Concepção", "Conceito da missão", "CubeSat", "Payload", "Órbita", "Comunicação", "Requisitos", "Software", "Revisão"]
   } : {
     eyebrow: "PROJECT MEMORY",
     title: "Bring in everything that already exists",
-    lead: "Connect sources and evidence to build the project's initial memory.",
     program: "PROGRAM / COMPETITION",
     competition: "Brazilian Satellite Olympiad",
     cycle: "2026 Cycle",
@@ -103,9 +99,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
     invite: "Invite member",
     unavailable: "In development",
     home: "Home",
-    nextPhase: "NEXT PHASE · 02",
     continue: "Start conception",
-    continueHelp: "The memory gathered here will be used as context during mission conception.",
     pipeline: ["Project memory", "Conception", "Mission concept", "CubeSat", "Payload", "Orbit", "Communication", "Requirements", "Software", "Review"]
   };
 
@@ -141,7 +135,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
           <div className="memory-heading memory-reference-heading">
             <div className="modal-eyebrow">{c.eyebrow}</div>
             <h1>{c.title}</h1>
-            <p>{c.lead}</p>
           </div>
 
           <section className="memory-program-card">
@@ -187,7 +180,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHo
           </section>
 
           <div className="memory-next-step memory-reference-next-step">
-            <div className="memory-next-copy"><small>{c.nextPhase}</small><span>{c.continueHelp}</span></div>
             <button className="technical-button primary memory-primary" onClick={onContinue}>{c.continue}<span aria-hidden="true">→</span></button>
           </div>
         </div>
