@@ -6,6 +6,7 @@ import "./workspace.css";
 import "./polish.css";
 import "./home-artwork.css";
 import "./setup-memory-readability.css";
+import "./brainstorm-readability.css";
 
 const root = document.getElementById("root");
 
