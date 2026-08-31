@@ -1,0 +1,303 @@
+.brain-v2 {
+  --brain-text: #f3f8ff;
+  --brain-muted: #b8cadb;
+  --brain-soft: #9dcbff;
+}
+
+.brain-v2 .brain-topbar {
+  min-height: 72px;
+}
+
+.brain-v2 .brain-breadcrumb {
+  color: var(--brain-muted);
+  font-size: 13px;
+  gap: 10px;
+}
+
+.brain-v2 .brain-breadcrumb strong {
+  color: #eaf4ff;
+  font-size: 14px;
+  font-weight: 520;
+}
+
+.brain-v2 .brain-workspace {
+  padding: 20px 24px 14px;
+  gap: 14px;
+}
+
+.brain-v2 .brain-title {
+  gap: 16px;
+}
+
+.brain-v2 .brain-title > span {
+  color: var(--brain-soft);
+  font-size: 12px;
+  font-weight: 520;
+  letter-spacing: .13em;
+}
+
+.brain-v2 .brain-title h1 {
+  color: #f7fbff;
+  font-size: 28px;
+  font-weight: 440;
+  letter-spacing: .1em;
+}
+
+.brain-v2 .brain-toolbar {
+  gap: 9px;
+}
+
+.brain-v2 .brain-toolbar > button {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #e8f3ff;
+  font-size: 12px;
+  font-weight: 500;
+  border-color: rgba(126, 183, 235, .36);
+  background: rgba(8, 30, 51, .78);
+}
+
+.brain-v2 .brain-toolbar > button:hover {
+  border-color: rgba(126, 190, 255, .7);
+  background: rgba(15, 47, 78, .8);
+}
+
+.brain-v2 .brain-toolbar > button.primary {
+  border-color: rgba(97, 166, 255, .72);
+  background: rgba(38, 98, 160, .34);
+  box-shadow: 0 0 18px rgba(72, 147, 232, .08);
+}
+
+.brain-v2 .mission-canvas {
+  background:
+    linear-gradient(rgba(108, 169, 226, .058) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 169, 226, .058) 1px, transparent 1px),
+    rgba(4, 18, 32, .5);
+  background-size: 24px 24px, 24px 24px, auto;
+}
+
+.brain-v2 .canvas-hint {
+  left: 17px;
+  top: 15px;
+  color: rgba(184, 206, 227, .76);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .11em;
+}
+
+.brain-v2 .bucket-guide span {
+  color: rgba(175, 201, 224, .7);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.brain-v2 .mission-node {
+  min-height: 122px;
+  padding: 14px 16px 15px;
+  border-color: rgba(126, 183, 235, .38);
+  background: rgba(6, 25, 44, .97);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .22);
+}
+
+.brain-v2 .mission-node.center {
+  border-color: rgba(109, 180, 248, .82);
+  background: rgba(10, 35, 59, .99);
+  box-shadow: 0 0 22px rgba(67, 144, 224, .06), 0 14px 32px rgba(0, 0, 0, .22);
+}
+
+.brain-v2 .mission-node-head {
+  margin-bottom: 10px;
+}
+
+.brain-v2 .mission-node-head > span {
+  color: var(--brain-soft);
+  font-size: 10px;
+  font-weight: 540;
+  letter-spacing: .12em;
+}
+
+.brain-v2 .mission-node-head > button {
+  width: 32px;
+  height: 29px;
+  color: #b6cadc;
+  font-size: 18px;
+}
+
+.brain-v2 .mission-node-title {
+  color: #f5f9ff;
+  font-size: 15px;
+  font-weight: 440;
+  line-height: 1.48;
+}
+
+.brain-v2 .mission-node-state {
+  margin-top: 11px;
+  color: #afc2d4;
+  font-size: 10px;
+  font-weight: 520;
+  letter-spacing: .08em;
+}
+
+.brain-v2 .mission-node-state i {
+  width: 7px;
+  height: 7px;
+}
+
+.brain-v2 .node-connector {
+  width: 17px;
+  height: 17px;
+  background: #071c31;
+  border-color: rgba(140, 197, 250, .74);
+}
+
+.brain-v2 .brain-sidebar {
+  background: linear-gradient(180deg, rgba(3, 16, 29, .99), rgba(5, 22, 38, .98));
+}
+
+.brain-v2 .brain-nav-item {
+  color: #c9d8e7;
+  font-size: 13px;
+}
+
+.brain-v2 .brain-nav-item.active {
+  color: #eef7ff;
+}
+
+.brain-v2 .brain-nav-section {
+  color: #87baf0;
+  font-size: 10px;
+  font-weight: 540;
+  letter-spacing: .12em;
+}
+
+.brain-v2 .step-list .step {
+  color: #aebfd0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.brain-v2 .step-list .step > span {
+  color: #87a9c8;
+  font-size: 9px;
+  font-weight: 560;
+}
+
+.brain-v2 .step-list .step.active {
+  color: #f1f7ff;
+  font-size: 13px;
+  font-weight: 520;
+}
+
+.brain-v2 .step-list .step.active > span {
+  color: #8dc4ff;
+}
+
+.brain-v2 .zoom-toolbar {
+  min-height: 44px;
+  color: #d9e7f4;
+  font-size: 12px;
+  background: rgba(5, 22, 38, .92);
+  border-color: rgba(126, 183, 235, .38);
+}
+
+.brain-v2 .zoom-toolbar button {
+  color: #e6f1fc;
+  font-size: 16px;
+}
+
+.brain-v2 .selected-link-toolbar {
+  color: #dbe8f5;
+  font-size: 12px;
+  background: rgba(5, 22, 38, .94);
+}
+
+.brain-v2 .node-menu-v2 {
+  color: #dce9f5;
+  font-size: 12px;
+  background: rgba(4, 19, 34, .98);
+}
+
+.brain-v2 .node-menu-v2 button {
+  color: #dce9f5;
+  font-size: 12px;
+}
+
+.brain-v2 .node-menu-label {
+  color: #8fc4f8;
+  font-size: 10px;
+  font-weight: 560;
+  letter-spacing: .1em;
+}
+
+.brain-v2 .brain-footer {
+  min-height: 54px;
+  color: #b8cadb;
+  font-size: 12px;
+}
+
+.brain-v2 .brain-footer button {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.brain-v2 .idea-modal h2 {
+  color: #f5f9ff;
+  font-size: 22px;
+}
+
+.brain-v2 .idea-modal textarea {
+  color: #f3f8ff;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.brain-v2 .word-limit,
+.brain-v2 .modal-actions button {
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .brain-v2 .brain-title h1 {
+    font-size: 24px;
+  }
+
+  .brain-v2 .brain-toolbar > button {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 760px) {
+  .brain-v2 .brain-workspace {
+    padding: 14px 12px 10px;
+  }
+
+  .brain-v2 .brain-title-row {
+    align-items: flex-start;
+  }
+
+  .brain-v2 .brain-title {
+    display: grid;
+    gap: 5px;
+  }
+
+  .brain-v2 .brain-title h1 {
+    font-size: 22px;
+    white-space: normal;
+  }
+
+  .brain-v2 .brain-title > span {
+    font-size: 10px;
+  }
+
+  .brain-v2 .brain-toolbar > button {
+    min-height: 42px;
+    font-size: 11px;
+  }
+
+  .brain-v2 .mission-node-title {
+    font-size: 14px;
+  }
+}
