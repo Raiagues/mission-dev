@@ -1,0 +1,474 @@
+.memory-shell {
+  background:
+    linear-gradient(rgba(80, 138, 194, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 138, 194, .045) 1px, transparent 1px),
+    radial-gradient(circle at 72% 18%, rgba(34, 92, 146, .12), transparent 28%),
+    linear-gradient(180deg, #06182b, #071a2d);
+  background-size: 28px 28px, 28px 28px, auto, auto;
+}
+
+.memory-nav {
+  padding: 18px 12px;
+  display: grid;
+  gap: 7px;
+}
+
+.memory-nav-item {
+  min-height: 48px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #c8d7e6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memory-nav-item > span {
+  width: 28px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.memory-nav-item.active {
+  color: var(--blue-soft);
+  border-left-color: var(--blue);
+  background: rgba(52, 126, 203, .11);
+}
+
+.memory-nav-item.active > span {
+  color: var(--blue);
+}
+
+.memory-nav-item.locked {
+  opacity: .42;
+  cursor: default;
+}
+
+.memory-context-card {
+  margin-top: 6px;
+}
+
+.memory-menu-lines {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 12px;
+  margin: auto;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+
+.memory-menu-lines::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 1px solid currentColor;
+}
+
+.memory-content {
+  width: min(1080px, calc(100% - 48px)) !important;
+  padding-top: 34px !important;
+  padding-bottom: 34px !important;
+}
+
+.memory-heading {
+  margin-bottom: 28px;
+}
+
+.memory-heading h1 {
+  max-width: 780px;
+  font-size: clamp(30px, 3vw, 44px);
+  font-weight: 350;
+  letter-spacing: .015em;
+}
+
+.memory-heading p {
+  max-width: 780px;
+}
+
+.memory-panel,
+.memory-block {
+  border: 1px solid var(--line);
+  background: rgba(5, 23, 40, .40);
+}
+
+.memory-panel {
+  padding: 18px 20px 20px;
+  margin-bottom: 22px;
+}
+
+.memory-panel-label {
+  margin-bottom: 14px;
+  color: var(--blue-soft);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.identity-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, .85fr) minmax(420px, 1.7fr);
+  gap: 16px;
+}
+
+.memory-field {
+  display: grid;
+  gap: 8px;
+}
+
+.memory-field > span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.intent-compact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.intent-compact {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  background: rgba(4, 19, 34, .62);
+  color: #cbd9e6;
+  padding: 7px 8px;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.intent-compact:hover,
+.intent-compact.selected {
+  border-color: var(--blue);
+}
+
+.intent-compact.selected {
+  color: var(--blue-soft);
+  background: rgba(43, 101, 160, .18);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.memory-block {
+  padding: 20px;
+  margin-top: 14px;
+}
+
+.memory-block-head {
+  display: grid;
+  grid-template-columns: minmax(220px, .75fr) minmax(260px, 1.25fr);
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.memory-block-head > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.memory-block-head > div > span {
+  color: var(--blue);
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+.memory-block-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.memory-block-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.memory-reference-entry {
+  grid-template-columns: 1fr auto auto;
+}
+
+.artifact-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.artifact-empty {
+  grid-column: 1 / -1;
+  min-height: 76px;
+  border: 1px dashed var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.artifact-card {
+  position: relative;
+  min-height: 96px;
+  border: 1px solid var(--line);
+  background: rgba(4, 19, 34, .46);
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 11px;
+  align-items: center;
+  padding: 13px;
+}
+
+.artifact-icon {
+  width: 38px;
+  height: 46px;
+  border: 1px solid var(--line-strong);
+  color: var(--blue-soft);
+  display: grid;
+  place-items: center;
+  font-size: 21px;
+}
+
+.artifact-copy {
+  min-width: 0;
+}
+
+.artifact-copy small,
+.artifact-copy strong,
+.artifact-copy span {
+  display: block;
+}
+
+.artifact-copy small {
+  margin-bottom: 5px;
+  color: var(--blue);
+  font-size: 8px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.artifact-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-copy span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.artifact-card > button {
+  align-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 17px;
+}
+
+.team-strip {
+  display: grid;
+  grid-template-columns: 1fr minmax(210px, .42fr);
+  border: 1px solid var(--line);
+  background: rgba(4, 19, 34, .42);
+}
+
+.team-member {
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+}
+
+.team-avatar {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--blue);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--blue-soft);
+  font-size: 12px;
+}
+
+.team-member strong,
+.team-member span {
+  display: block;
+}
+
+.team-member strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.team-member span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.team-member i {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.team-invite {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: rgba(2, 13, 24, .42);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  cursor: not-allowed;
+}
+
+.team-invite > span {
+  font-size: 22px;
+}
+
+.team-invite strong {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.team-invite small {
+  font-size: 7px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.contribution-area {
+  min-height: 116px;
+  line-height: 1.55;
+}
+
+.maturity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.maturity-option {
+  min-height: 82px;
+  border: 1px solid var(--line);
+  background: rgba(4, 19, 34, .46);
+  color: var(--text);
+  text-align: left;
+  padding: 13px 14px;
+  cursor: pointer;
+}
+
+.maturity-option strong,
+.maturity-option span {
+  display: block;
+}
+
+.maturity-option strong {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.maturity-option span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.maturity-option.selected {
+  border-color: var(--blue);
+  background: rgba(43, 101, 160, .16);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.memory-primary {
+  min-width: 270px;
+}
+
+@media (max-width: 980px) {
+  .identity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .intent-compact-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .memory-block-head {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+}
+
+@media (max-width: 760px) {
+  .memory-content {
+    width: calc(100% - 22px) !important;
+    padding-top: 18px !important;
+  }
+
+  .memory-heading h1 {
+    font-size: 26px;
+  }
+
+  .memory-panel,
+  .memory-block {
+    padding: 14px;
+  }
+
+  .intent-compact-grid,
+  .artifact-grid,
+  .maturity-grid,
+  .team-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-reference-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .team-invite {
+    min-height: 70px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .artifact-card {
+    grid-template-columns: 36px 1fr auto;
+  }
+
+  .artifact-icon {
+    width: 34px;
+    height: 42px;
+  }
+
+  .memory-footer .setup-footer-actions {
+    grid-template-columns: .72fr 1.28fr;
+  }
+
+  .memory-primary {
+    min-width: 0;
+    font-size: 10px;
+  }
+}
