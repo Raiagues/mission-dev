@@ -62,7 +62,7 @@ function LinkIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.2 13.8 8.8 15.2a3.1 3.1 0 0 1-4.4-4.4l2.5-2.5a3.1 3.1 0 0 1 4.4 0" /><path d="m13.8 10.2 1.4-1.4a3.1 3.1 0 1 1 4.4 4.4l-2.5 2.5a3.1 3.1 0 0 1-4.4 0" /><path d="m9.3 14.7 5.4-5.4" /></svg>;
 }
 
-export function StudySetupPage({ language, project, t, onLanguageChange, onContinue, onHome }: Props) {
+export function StudySetupPage({ language, t, onLanguageChange, onContinue, onHome }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const c = language === "pt" ? {
