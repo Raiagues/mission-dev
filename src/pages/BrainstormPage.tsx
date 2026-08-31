@@ -19,6 +19,7 @@ type Props = {
 
 type Transform = { scale: number; x: number; y: number };
 type NodeMenu = { id: number; x: number; y: number } | null;
+type DragState = { id: number; pointerId: number; offsetX: number; offsetY: number } | null;
 type PanState = { pointerId: number; startX: number; startY: number; originX: number; originY: number } | null;
 type ConnectionState = { from: number; pointerId: number; x: number; y: number } | null;
 
@@ -28,6 +29,7 @@ const NODE_HEIGHT = 112;
 
 export function BrainstormPage({ language, project, t, onLanguageChange, onProjectChange, onHome, onBackSetup }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<DragState>(null);
   const panRef = useRef<PanState>(null);
   const connectionRef = useRef<ConnectionState>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -46,7 +48,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const nodes = project.board.nodes;
   const links = project.board.links;
   const visibleNodeIds = useMemo(() => getVisibleNodeIds(focusRootId, nodes, links), [focusRootId, links, nodes]);
-  const visibleNodes = useMemo(() => nodes.filter((node) => visibleNodeIds.has(node.id)), [nodes, visibleNodeIds]);
 
   function updateProject(patch: Partial<MissionProject>) {
     onProjectChange({ ...project, ...patch });
@@ -99,6 +100,21 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     document.body.classList.remove("workspace-interacting");
   }
 
+  function startNodeDrag(event: React.PointerEvent<HTMLDivElement>, id: number) {
+    if ((event.target as HTMLElement).closest("button, .node-connector")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const node = nodes.find((item) => item.id === id);
+    if (!node) return;
+    const point = worldPoint(event.clientX, event.clientY);
+    dragRef.current = { id, pointerId: event.pointerId, offsetX: point.x - node.x, offsetY: point.y - node.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedNodeId(id);
+    setSelectedLinkId(null);
+    setNodeMenu(null);
+    lockSelection();
+  }
+
   function startPan(event: React.PointerEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest("[data-node-id], [data-panel], [data-control], path")) return;
     event.preventDefault();
@@ -125,6 +141,17 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (drag && drag.pointerId === event.pointerId) {
+      event.preventDefault();
+      const point = worldPoint(event.clientX, event.clientY);
+      const x = Math.max(0, Math.min(WORLD_WIDTH - 120, point.x - drag.offsetX));
+      const y = Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, point.y - drag.offsetY));
+      const nextNodes = nodes.map((node) => node.id === drag.id ? { ...node, x: Math.min(x, WORLD_WIDTH - node.width), y } : node);
+      updateBoard(nextNodes);
+      return;
+    }
+
     const pan = panRef.current;
     if (pan && pan.pointerId === event.pointerId) {
       event.preventDefault();
@@ -151,6 +178,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
       if (Number.isFinite(targetId) && targetId !== connection.from) createLink(connection.from, targetId);
     }
 
+    dragRef.current = null;
     panRef.current = null;
     connectionRef.current = null;
     setConnectionDraft(null);
@@ -375,8 +403,8 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
                 })()}
               </svg>
 
-              {visibleNodes.map((node) => (
-                <div key={node.id} data-node-id={node.id} className={`mission-node ${node.type ?? "normal"} ${node.bucket ?? "main"} ${node.state} ${selectedNodeId === node.id ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={() => { setSelectedNodeId(node.id); setSelectedLinkId(null); }}>
+              {nodes.filter((node) => visibleNodeIds.has(node.id)).map((node) => (
+                <div key={node.id} data-node-id={node.id} className={`mission-node ${node.type ?? "normal"} ${node.bucket ?? "main"} ${node.state} ${selectedNodeId === node.id ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={(event) => startNodeDrag(event, node.id)}>
                   <div className="mission-node-head"><span>{resolveKicker(node)}</span><button aria-label={ux(language, "cardMenu")} onClick={(event) => openCardMenu(event, node.id)}>⋯</button></div>
                   <div className="mission-node-title">{resolveNodeTitle(node)}</div>
                   <div className="mission-node-state"><i />{stateLabel(node.state)}</div>
