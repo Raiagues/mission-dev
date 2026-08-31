@@ -13,6 +13,14 @@ type Props = {
 
 const SATELLITE_FILES = [1, 2, 3].map((index) => `${import.meta.env.BASE_URL}satellites/sat-${index}.jpg.b64.txt`);
 
+function normalizeBase64(payload: string) {
+  const clean = payload.replace(/\s+/g, "");
+  const firstPadding = clean.indexOf("=");
+  if (firstPadding < 0) return clean;
+  const paddingLength = clean[firstPadding + 1] === "=" ? 2 : 1;
+  return clean.slice(0, firstPadding + paddingLength);
+}
+
 export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -27,7 +35,7 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
       const images = await Promise.all(SATELLITE_FILES.map(async (file) => {
         const response = await fetch(file);
         if (!response.ok) throw new Error(`Unable to load ${file}`);
-        const base64 = (await response.text()).trim();
+        const base64 = normalizeBase64(await response.text());
         return `data:image/jpeg;base64,${base64}`;
       }));
 
