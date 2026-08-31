@@ -1,12 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { Brand } from "../components/Brand";
-import { IssueStudyPanel } from "../components/IssueStudyPanel";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
-import { canCloseProblemPhase, getCheckpoints, getIssues, getNodeStateProgress, getProgress, getScopedIssues, getVisibleNodeIds, layoutTopDown, limitWords, MAX_CARD_WORDS } from "../lib/missionModel";
-import { buildVirtualProjectFiles, exportProject, strongestStateForNodeIds } from "../lib/projectStore";
-import type { CustomProgressCriterion, IssueStudy, MissionProject } from "../lib/projectStore";
-import type { Language, MissionIssue, MissionLink, MissionNode, NodeBucket, NodeState } from "../lib/types";
+import { getVisibleNodeIds, layoutTopDown, limitWords, MAX_CARD_WORDS } from "../lib/missionModel";
+import { buildVirtualProjectFiles, exportProject } from "../lib/projectStore";
+import type { MissionProject } from "../lib/projectStore";
+import type { Language, MissionLink, MissionNode, NodeBucket, NodeState } from "../lib/types";
 import { ux } from "../lib/uxCopy";
 
 type Props = {
@@ -20,9 +19,8 @@ type Props = {
 };
 
 type Transform = { scale: number; x: number; y: number };
-type Drawer = "issues" | "progress" | "files" | "studies" | null;
+type Drawer = "files" | null;
 type NodeMenu = { id: number; x: number; y: number } | null;
-type DragState = { id: number; pointerId: number; offsetX: number; offsetY: number } | null;
 type PanState = { pointerId: number; startX: number; startY: number; originX: number; originY: number } | null;
 type ConnectionState = { from: number; pointerId: number; x: number; y: number } | null;
 
@@ -32,7 +30,6 @@ const NODE_HEIGHT = 112;
 
 export function BrainstormPage({ language, project, t, onLanguageChange, onProjectChange, onHome, onBackSetup }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<DragState>(null);
   const panRef = useRef<PanState>(null);
   const connectionRef = useRef<ConnectionState>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -40,7 +37,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const [panning, setPanning] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<number | null>(null);
-  const [highlightIds, setHighlightIds] = useState<Set<number>>(new Set());
   const [nodeMenu, setNodeMenu] = useState<NodeMenu>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [focusRootId, setFocusRootId] = useState<number | null>(null);
@@ -49,47 +45,15 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const [cardModalOpen, setCardModalOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
   const [cardText, setCardText] = useState("");
-  const [activeStudyId, setActiveStudyId] = useState<string | null>(null);
-  const [criterionName, setCriterionName] = useState("");
-  const [criterionMandatory, setCriterionMandatory] = useState(true);
-  const [phaseClosed, setPhaseClosed] = useState(false);
 
   const nodes = project.board.nodes;
   const links = project.board.links;
   const visibleNodeIds = useMemo(() => getVisibleNodeIds(focusRootId, nodes, links), [focusRootId, links, nodes]);
   const visibleNodes = useMemo(() => nodes.filter((node) => visibleNodeIds.has(node.id)), [nodes, visibleNodeIds]);
-  const allIssues = useMemo(() => getIssues(nodes), [nodes]);
-  const scopedIssues = useMemo(() => getScopedIssues(nodes, visibleNodeIds, project.resolvedIssueKeys), [nodes, project.resolvedIssueKeys, visibleNodeIds]);
-  const activeStudy = activeStudyId ? project.studies.find((study) => study.id === activeStudyId) ?? null : null;
-  const activeStudyIssue = activeStudy ? allIssues.find((issue) => issue.key === activeStudy.issueKey) ?? null : null;
   const files = useMemo(() => buildVirtualProjectFiles(project), [project]);
-  const standardCheckpoints = useMemo(() => getCheckpoints(focusRootId === null ? nodes : visibleNodes), [focusRootId, nodes, visibleNodes]);
-  const scopedCustomCriteria = useMemo(() => project.progress.customCriteria.filter((criterion) => criterion.scopeRootId === focusRootId), [focusRootId, project.progress.customCriteria]);
-  const displayProgress = useMemo(() => {
-    if (focusRootId !== null && project.progress.mode === "standard") return getNodeStateProgress(visibleNodes);
-    if (project.progress.mode === "standard") return getProgress(nodes);
-    if (scopedCustomCriteria.length === 0) return getNodeStateProgress(visibleNodes);
-    let score = 0;
-    for (const criterion of scopedCustomCriteria) {
-      const state = strongestStateForNodeIds(nodes, criterion.evidenceNodeIds);
-      if (state === "defined") score += 1;
-      if (state === "hypothesis") score += 0.5;
-    }
-    return Math.round((score / scopedCustomCriteria.length) * 100);
-  }, [focusRootId, nodes, project.progress.mode, scopedCustomCriteria, visibleNodes]);
-
-  const macroCanClose = useMemo(() => {
-    if (project.progress.mode === "standard") return canCloseProblemPhase(nodes, project.resolvedIssueKeys);
-    const globalCriteria = project.progress.customCriteria.filter((criterion) => criterion.scopeRootId === null);
-    if (globalCriteria.length === 0) return false;
-    const mandatoryReady = globalCriteria.every((criterion) => !criterion.mandatory || strongestStateForNodeIds(nodes, criterion.evidenceNodeIds) === "defined");
-    const criticalOpen = getScopedIssues(nodes, new Set(nodes.map((node) => node.id)), project.resolvedIssueKeys).some((issue) => issue.severity === "critical");
-    return mandatoryReady && !criticalOpen;
-  }, [nodes, project.progress.customCriteria, project.progress.mode, project.resolvedIssueKeys]);
 
   function updateProject(patch: Partial<MissionProject>) {
     onProjectChange({ ...project, ...patch });
-    setPhaseClosed(false);
   }
 
   function updateBoard(nextNodes: MissionNode[], nextLinks = links) {
@@ -131,38 +95,12 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
   }
 
-  function issuePath(issue: MissionIssue): string {
-    if (issue.nodeIds.length < 2) return "";
-    const from = nodes.find((node) => node.id === issue.nodeIds[0]);
-    const to = nodes.find((node) => node.id === issue.nodeIds[1]);
-    if (!from || !to) return "";
-    const a = nodeCenter(from);
-    const b = nodeCenter(to);
-    const midX = (a.x + b.x) / 2;
-    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
-  }
-
   function lockSelection() {
     document.body.classList.add("workspace-interacting");
   }
 
   function unlockSelection() {
     document.body.classList.remove("workspace-interacting");
-  }
-
-  function startNodeDrag(event: React.PointerEvent<HTMLDivElement>, id: number) {
-    if ((event.target as HTMLElement).closest("button, .node-connector")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const node = nodes.find((item) => item.id === id);
-    if (!node) return;
-    const point = worldPoint(event.clientX, event.clientY);
-    dragRef.current = { id, pointerId: event.pointerId, offsetX: point.x - node.x, offsetY: point.y - node.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedNodeId(id);
-    setSelectedLinkId(null);
-    setNodeMenu(null);
-    lockSelection();
   }
 
   function startPan(event: React.PointerEvent<HTMLDivElement>) {
@@ -173,7 +111,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     setPanning(true);
     setSelectedNodeId(null);
     setSelectedLinkId(null);
-    setHighlightIds(new Set());
     setNodeMenu(null);
     lockSelection();
   }
@@ -192,15 +129,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (drag && drag.pointerId === event.pointerId) {
-      event.preventDefault();
-      const point = worldPoint(event.clientX, event.clientY);
-      const nextNodes = nodes.map((node) => node.id === drag.id ? { ...node, x: Math.max(0, Math.min(WORLD_WIDTH - node.width, point.x - drag.offsetX)), y: Math.max(0, Math.min(WORLD_HEIGHT - NODE_HEIGHT, point.y - drag.offsetY)) } : node);
-      updateBoard(nextNodes);
-      return;
-    }
-
     const pan = panRef.current;
     if (pan && pan.pointerId === event.pointerId) {
       event.preventDefault();
@@ -227,7 +155,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
       if (Number.isFinite(targetId) && targetId !== connection.from) createLink(connection.from, targetId);
     }
 
-    dragRef.current = null;
     panRef.current = null;
     connectionRef.current = null;
     setConnectionDraft(null);
@@ -295,7 +222,8 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   function addNode(title: string, bucket: NodeBucket = "ideas", parentId: number | null = null, kickerKey = "nodes.freeIdeaKicker") {
     const id = Math.max(29, ...nodes.map((node) => node.id)) + 1;
     const parent = parentId ? nodes.find((node) => node.id === parentId) : null;
-    const center = worldPoint((viewportRef.current?.getBoundingClientRect().left ?? 0) + (viewportRef.current?.clientWidth ?? 1000) / 2, (viewportRef.current?.getBoundingClientRect().top ?? 0) + (viewportRef.current?.clientHeight ?? 700) / 2);
+    const viewportRect = viewportRef.current?.getBoundingClientRect();
+    const center = worldPoint((viewportRect?.left ?? 0) + (viewportRef.current?.clientWidth ?? 1000) / 2, (viewportRect?.top ?? 0) + (viewportRef.current?.clientHeight ?? 700) / 2);
     const newNode: MissionNode = { id, x: parent ? parent.x : center.x - 120, y: parent ? parent.y + 210 : center.y - 55, width: 240, title: limitWords(title), kickerKey, state: "open", type: bucket === "questions" ? "question" : "normal", bucket };
     const nextLinks = parentId ? [...links, { id: Math.max(199, ...links.map((link) => link.id)) + 1, from: parentId, to: id, type: "normal" as const }] : links;
     updateBoard([...nodes, newNode], nextLinks);
@@ -334,7 +262,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     setNodeMenu(null);
     setSelectedNodeId(null);
     setSelectedLinkId(null);
-    setHighlightIds(new Set());
     window.setTimeout(() => fitNodeIds(Array.from(getVisibleNodeIds(id, nodes, links))), 0);
   }
 
@@ -343,7 +270,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     setPageStack((current) => current.slice(0, -1));
     setFocusRootId(previous);
     setDrawer(null);
-    setHighlightIds(new Set());
     window.setTimeout(() => fitNodeIds(Array.from(getVisibleNodeIds(previous, nodes, links))), 0);
   }
 
@@ -372,81 +298,9 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   function saveCard() {
     const text = limitWords(cardText);
     if (!text) return;
-    if (editingNodeId !== null) {
-      updateBoard(nodes.map((node) => node.id === editingNodeId ? { ...node, title: text, titleKey: undefined } : node));
-    } else {
-      addNode(text, "ideas");
-    }
+    if (editingNodeId !== null) updateBoard(nodes.map((node) => node.id === editingNodeId ? { ...node, title: text, titleKey: undefined } : node));
+    else addNode(text, "ideas");
     setCardModalOpen(false);
-  }
-
-  function showIssue(issue: MissionIssue) {
-    setHighlightIds(new Set(issue.nodeIds));
-    setDrawer(null);
-    window.setTimeout(() => fitNodeIds(issue.nodeIds), 0);
-  }
-
-  function createStudy(issue: MissionIssue): IssueStudy {
-    const existing = project.studies.find((study) => study.issueKey === issue.key && study.scopeRootId === focusRootId);
-    if (existing) return existing;
-    return {
-      id: `study-${issue.key}-${focusRootId ?? "macro"}-${Date.now()}`,
-      issueKey: issue.key,
-      scopeRootId: focusRootId,
-      relatedNodeIds: issue.nodeIds,
-      hypotheses: issue.suggestions.map((suggestion, index) => ({ id: `seed-${issue.key}-${index}`, title: t(suggestion.titleKey), notes: t(suggestion.descriptionKey), status: "candidate" })),
-      notes: "",
-      conclusionHypothesisId: null,
-      status: "draft",
-      updatedAt: new Date().toISOString()
-    };
-  }
-
-  function openIssueStudy(issue: MissionIssue) {
-    const study = createStudy(issue);
-    if (!project.studies.some((item) => item.id === study.id)) updateProject({ studies: [...project.studies, study] });
-    setActiveStudyId(study.id);
-    setDrawer(null);
-  }
-
-  function changeStudy(study: IssueStudy) {
-    updateProject({ studies: project.studies.map((item) => item.id === study.id ? study : item) });
-  }
-
-  function resolveStudy(study: IssueStudy) {
-    const studies = project.studies.map((item) => item.id === study.id ? study : item);
-    const resolvedIssueKeys = project.resolvedIssueKeys.includes(study.issueKey) ? project.resolvedIssueKeys : [...project.resolvedIssueKeys, study.issueKey];
-    updateProject({ studies, resolvedIssueKeys });
-    setActiveStudyId(null);
-  }
-
-  function reopenStudy(study: IssueStudy) {
-    const next = { ...study, status: "draft" as const, conclusionHypothesisId: null, updatedAt: new Date().toISOString() };
-    updateProject({ studies: project.studies.map((item) => item.id === study.id ? next : item), resolvedIssueKeys: project.resolvedIssueKeys.filter((key) => key !== study.issueKey) });
-    setActiveStudyId(next.id);
-    setDrawer(null);
-  }
-
-  function setProgressMode(mode: MissionProject["progress"]["mode"]) {
-    updateProject({ progress: { ...project.progress, mode } });
-  }
-
-  function addCustomCriterion() {
-    const label = criterionName.trim();
-    if (!label || selectedNodeId === null) return;
-    const criterion: CustomProgressCriterion = { id: `criterion-${Date.now()}`, label, mandatory: criterionMandatory, evidenceNodeIds: [selectedNodeId], scopeRootId: focusRootId };
-    updateProject({ progress: { ...project.progress, mode: "custom", customCriteria: [...project.progress.customCriteria, criterion] } });
-    setCriterionName("");
-    setCriterionMandatory(true);
-  }
-
-  function removeCustomCriterion(id: string) {
-    updateProject({ progress: { ...project.progress, customCriteria: project.progress.customCriteria.filter((criterion) => criterion.id !== id) } });
-  }
-
-  function validatePhase() {
-    if (!macroCanClose || focusRootId !== null) return;
-    setPhaseClosed(true);
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -456,10 +310,8 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     }
   }
 
-  const selectedNode = selectedNodeId !== null ? nodes.find((node) => node.id === selectedNodeId) ?? null : null;
   const focusNode = focusRootId !== null ? nodes.find((node) => node.id === focusRootId) ?? null : null;
   const nodeMenuNode = nodeMenu ? nodes.find((node) => node.id === nodeMenu.id) ?? null : null;
-  const issueNodeIds = new Set(scopedIssues.flatMap((issue) => issue.nodeIds));
 
   return (
     <div className="brain-shell brain-v2" onKeyDown={handleKeyDown} tabIndex={-1}>
@@ -471,7 +323,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
           <div className="brain-nav-section">{t("home.createMission")}</div>
           <div className="step-list">
             <div className="step done"><span>01</span>{t("brainstorm.pointStart")}</div>
-            <div className={phaseClosed ? "step active done" : "step active"}><span>02</span>{t("brainstorm.problem")}</div>
+            <div className="step active"><span>02</span>{t("brainstorm.problem")}</div>
             <div className="step"><span>03</span>{t("brainstorm.context")}</div>
             <div className="step"><span>04</span>{t("brainstorm.objectives")}</div>
             <div className="step"><span>05</span>{t("brainstorm.concept")}</div>
@@ -483,7 +335,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
           </div>
           <div className="brain-nav-section">{ux(language, "projectStructure")}</div>
           <button className="brain-nav-item" onClick={() => { setDrawer("files"); setSidebarOpen(false); }}><span>▤</span><span>{ux(language, "files")}</span></button>
-          <button className="brain-nav-item" onClick={() => { setDrawer("studies"); setSidebarOpen(false); }}><span>⌁</span><span>{ux(language, "studies")}</span></button>
           <button className="brain-nav-item"><span>□</span><span>{t("brainstorm.documentation")}</span></button>
         </nav>
         <div className="brain-sidebar-user"><UserBadge connectedLabel={t("common.connected")} /></div>
@@ -505,8 +356,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
             <div className="brain-title"><span>{ux(language, "problemPhase")}</span><h1>{ux(language, "conceptionRoom")}</h1></div>
             <div className="brain-toolbar" data-control>
               <button onClick={organize}>{ux(language, "organizeTopDown")}</button>
-              <button className={scopedIssues.length > 0 ? "issue-button" : ""} onClick={() => setDrawer("issues")}>{t("brainstorm.inconsistencies")} <b>{scopedIssues.length}</b></button>
-              <button className="progress-control" onClick={() => setDrawer("progress")}><span>{focusRootId === null ? ux(language, "projectProgress") : ux(language, "pageProgress")}</span><strong>{displayProgress}%</strong><i><em style={{ width: `${displayProgress}%` }} /></i></button>
               <button className="primary" onClick={openNewCard}>{ux(language, "newIdea")}</button>
             </div>
           </div>
@@ -520,19 +369,10 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
               <div className="bucket-guide questions"><span>{ux(language, "openQuestions")}</span></div>
 
               <svg className="graph-lines" width={WORLD_WIDTH} height={WORLD_HEIGHT}>
-                {links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to)).map((link) => {
-                  const issueRelated = scopedIssues.some((issue) => issue.nodeIds.includes(link.from) || issue.nodeIds.includes(link.to));
-                  return (
-                    <g key={link.id}>
-                      <path className={`graph-line ${link.type === "suggestion" ? "suggestion" : ""} ${issueRelated ? "issue-related" : ""} ${selectedLinkId === link.id ? "selected" : ""}`} d={linkPath(link)} />
-                      <path className="graph-line-hit" d={linkPath(link)} onPointerDown={(event) => { event.stopPropagation(); setSelectedLinkId(link.id); setSelectedNodeId(null); setNodeMenu(null); }} />
-                    </g>
-                  );
-                })}
-                {scopedIssues.filter((issue) => issue.nodeIds.length > 1).map((issue) => (
-                  <g key={`issue-${issue.key}`}>
-                    <path className="issue-relation" d={issuePath(issue)} />
-                    <path className="issue-relation-hit" d={issuePath(issue)} onPointerDown={(event) => { event.stopPropagation(); openIssueStudy(issue); }} />
+                {links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to)).map((link) => (
+                  <g key={link.id}>
+                    <path className={`graph-line ${link.type === "suggestion" ? "suggestion" : ""} ${selectedLinkId === link.id ? "selected" : ""}`} d={linkPath(link)} />
+                    <path className="graph-line-hit" d={linkPath(link)} onPointerDown={(event) => { event.stopPropagation(); setSelectedLinkId(link.id); setSelectedNodeId(null); setNodeMenu(null); }} />
                   </g>
                 ))}
                 {connectionDraft && (() => {
@@ -545,7 +385,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
               </svg>
 
               {visibleNodes.map((node) => (
-                <div key={node.id} data-node-id={node.id} className={`mission-node ${node.type ?? "normal"} ${node.bucket ?? "main"} ${node.state} ${selectedNodeId === node.id ? "selected" : ""} ${highlightIds.has(node.id) ? "highlight" : ""} ${issueNodeIds.has(node.id) ? "has-issue" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={(event) => startNodeDrag(event, node.id)}>
+                <div key={node.id} data-node-id={node.id} className={`mission-node ${node.type ?? "normal"} ${node.bucket ?? "main"} ${node.state} ${selectedNodeId === node.id ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width }} onPointerDown={() => { setSelectedNodeId(node.id); setSelectedLinkId(null); }}>
                   <div className="mission-node-head"><span>{resolveKicker(node)}</span><button aria-label={ux(language, "cardMenu")} onClick={(event) => openCardMenu(event, node.id)}>⋯</button></div>
                   <div className="mission-node-title">{resolveNodeTitle(node)}</div>
                   <div className="mission-node-state"><i />{stateLabel(node.state)}</div>
@@ -568,69 +408,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
 
             {drawer !== null && <button className="drawer-scrim" data-panel onClick={() => setDrawer(null)} aria-label={ux(language, "closePanel")} />}
 
-            {drawer === "issues" && (
-              <aside className="workspace-drawer" data-panel>
-                <header><div><small>{ux(language, "currentScope")}</small><h2>{t("brainstorm.issuesAndGaps")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
-                <p className="drawer-lead">{ux(language, "scopedIssues")}</p>
-                {scopedIssues.length === 0 && <div className="drawer-empty">{ux(language, "noScopedIssues")}</div>}
-                {scopedIssues.map((issue) => (
-                  <article className="issue-list-card" key={issue.key}>
-                    <div className="issue-severity">{issue.severity === "critical" ? "CRITICAL" : "GAP"}</div>
-                    <h3>{t(issue.titleKey)}</h3>
-                    <p>{t(issue.descriptionKey)}</p>
-                    <small>{ux(language, "openStudyFromIssue")}</small>
-                    <div className="drawer-card-actions"><button onClick={() => showIssue(issue)}>{t("brainstorm.showMap")}</button><button className="primary" onClick={() => openIssueStudy(issue)}>{ux(language, "exploreIssue")}</button></div>
-                  </article>
-                ))}
-              </aside>
-            )}
-
-            {drawer === "progress" && (
-              <aside className="workspace-drawer progress-drawer" data-panel>
-                <header><div><small>{focusRootId === null ? ux(language, "macroScope") : ux(language, "currentScope")}</small><h2>{t("brainstorm.criteria")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
-                <div className="progress-model-switch">
-                  <span>{ux(language, "progressModel")}</span>
-                  <div><button className={project.progress.mode === "standard" ? "active" : ""} onClick={() => setProgressMode("standard")}>{ux(language, "standardProgress")}</button><button className={project.progress.mode === "custom" ? "active" : ""} onClick={() => setProgressMode("custom")}>{ux(language, "customProgress")}</button></div>
-                  <p>{project.progress.mode === "standard" ? ux(language, "standardProgressDesc") : ux(language, "customProgressDesc")}</p>
-                </div>
-
-                {project.progress.mode === "standard" ? (
-                  <div className="criteria-list">
-                    {focusRootId !== null && <p className="drawer-lead">{ux(language, "pageStateProgress")}</p>}
-                    {standardCheckpoints.map((checkpoint) => (
-                      <div className="criterion-row" key={checkpoint.key}>
-                        <div><strong>{t(checkpoint.nameKey)}{checkpoint.mandatory ? " *" : ""}</strong><small>{t(checkpoint.descriptionKey)}</small></div>
-                        <span className={checkpoint.state}>{stateLabel(checkpoint.state)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="custom-progress-block">
-                    <div className="study-section-title">{ux(language, "customCriteria")}</div>
-                    {scopedCustomCriteria.length === 0 && <div className="drawer-empty">{ux(language, "noCustomCriteria")}</div>}
-                    {scopedCustomCriteria.map((criterion) => {
-                      const state = strongestStateForNodeIds(nodes, criterion.evidenceNodeIds);
-                      const evidence = nodes.filter((node) => criterion.evidenceNodeIds.includes(node.id));
-                      return (
-                        <div className="custom-criterion" key={criterion.id}>
-                          <div className="criterion-row"><div><strong>{criterion.label}{criterion.mandatory ? " *" : ""}</strong><small>{ux(language, "criterionEvidence")}: {evidence.map(resolveNodeTitle).join(", ")}</small></div><span className={state}>{stateLabel(state)}</span></div>
-                          <button onClick={() => removeCustomCriterion(criterion.id)}>{ux(language, "removeCriterion")}</button>
-                        </div>
-                      );
-                    })}
-                    <div className="criterion-builder">
-                      <input value={criterionName} placeholder={ux(language, "criterionPlaceholder")} onChange={(event) => setCriterionName(event.target.value)} />
-                      <label><input type="checkbox" checked={criterionMandatory} onChange={(event) => setCriterionMandatory(event.target.checked)} />{ux(language, "mandatory")}</label>
-                      <button className="technical-button" disabled={selectedNodeId === null || !criterionName.trim()} onClick={addCustomCriterion}>{ux(language, "addCriterionFromSelected")}</button>
-                      {selectedNode ? <small>{ux(language, "criterionEvidence")}: {resolveNodeTitle(selectedNode)}</small> : <small>{ux(language, "selectCardForCriterion")}</small>}
-                    </div>
-                  </div>
-                )}
-
-                {focusRootId === null && <div className="phase-validation-card"><h3>{t("brainstorm.validation")}</h3><p>{macroCanClose ? t("brainstorm.allRequired") : ux(language, "cannotClose")}</p><button className="technical-button primary" disabled={!macroCanClose || phaseClosed} onClick={validatePhase}>{phaseClosed ? ux(language, "validatedPhase") : ux(language, "validatePhase")}</button></div>}
-              </aside>
-            )}
-
             {drawer === "files" && (
               <aside className="workspace-drawer" data-panel>
                 <header><div><small>{ux(language, "autosaved")}</small><h2>{ux(language, "projectFiles")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
@@ -643,27 +420,9 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
                 <small className="export-hint">{ux(language, "exportHint")}</small>
               </aside>
             )}
-
-            {drawer === "studies" && (
-              <aside className="workspace-drawer" data-panel>
-                <header><div><small>{ux(language, "projectStructure")}</small><h2>{ux(language, "studies")}</h2></div><button className="drawer-close-button" onClick={() => setDrawer(null)}>×</button></header>
-                {project.studies.length === 0 && <div className="drawer-empty">{ux(language, "noStudies")}</div>}
-                {project.studies.map((study) => {
-                  const issue = allIssues.find((item) => item.key === study.issueKey);
-                  return (
-                    <article className="study-list-card" key={study.id}>
-                      <span className={study.status}>{study.status === "resolved" ? ux(language, "studyResolved") : ux(language, "issueStudyDraft")}</span>
-                      <h3>{issue ? t(issue.titleKey) : study.issueKey}</h3>
-                      <small>{study.scopeRootId === null ? ux(language, "macroScope") : ux(language, "currentScope")}</small>
-                      <button className="technical-button" onClick={() => study.status === "resolved" ? reopenStudy(study) : setActiveStudyId(study.id)}>{study.status === "resolved" ? ux(language, "reopenStudy") : ux(language, "exploreIssue")}</button>
-                    </article>
-                  );
-                })}
-              </aside>
-            )}
           </div>
 
-          <footer className="brain-footer"><span>{phaseClosed ? ux(language, "validatedPhase") : t("brainstorm.canContinue")}</span><div><button onClick={onBackSetup}>{ux(language, "back")}</button><button className="primary">{t("common.continue")} →</button></div></footer>
+          <footer className="brain-footer"><span>{t("brainstorm.canContinue")}</span><div><button onClick={onBackSetup}>{ux(language, "back")}</button><button className="primary">{t("common.continue")} →</button></div></footer>
         </section>
       </main>
 
@@ -700,8 +459,6 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
           </div>
         </div>
       )}
-
-      {activeStudy && activeStudyIssue && <IssueStudyPanel language={language} issue={activeStudyIssue} nodes={nodes} study={activeStudy} t={t} resolveNodeTitle={resolveNodeTitle} onChange={changeStudy} onResolve={resolveStudy} onClose={() => setActiveStudyId(null)} />}
     </div>
   );
 }
