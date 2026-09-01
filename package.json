@@ -3,6 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raiagues/norte.git"
+  },
+  "homepage": "https://raiagues.github.io/norte/",
+  "bugs": {
+    "url": "https://github.com/Raiagues/norte/issues"
+  },
   "engines": {
     "node": ">=24.20.0"
   },
@@ -44,7 +52,7 @@
     "eslint": "^10.9.1",
     "pg-mem": "^3.0.14",
     "playwright-core": "^1.62.1",
-    "typescript": "5.9.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

@@ -22,7 +22,7 @@ Não coloque essa URL no GitHub, em arquivos `.env` versionados ou em capturas d
 
 ## 2. Aplicação no Render
 
-1. Abra [o Blueprint do Norte](https://render.com/deploy?repo=https://github.com/Raiagues/mission-dev).
+1. Abra [o Blueprint do Norte](https://render.com/deploy?repo=https://github.com/Raiagues/norte).
 2. Conecte sua conta GitHub e autorize o repositório.
 3. Preencha `DATABASE_URL` com a URL pooled do Neon.
 4. Preencha `GEMINI_API_KEY` com a chave do Google AI Studio.

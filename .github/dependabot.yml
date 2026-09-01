@@ -8,6 +8,10 @@ updates:
       time: "05:00"
       timezone: Europe/Zurich
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint currently declares support through TypeScript 6.x.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       production-minor-patch:
         dependency-type: production

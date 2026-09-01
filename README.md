@@ -23,14 +23,14 @@ A primeira conta criada vira proprietária/admin. As próximas contas usam o có
 
 Cada atualização da `main` publica automaticamente uma demonstração navegável. Ela guarda alterações somente no navegador, usa perfis demonstrativos e não possui contas compartilhadas nem Gemini remoto.
 
-`https://raiagues.github.io/mission-dev/`
+[https://raiagues.github.io/norte/](https://raiagues.github.io/norte/)
 
 ### Norte completo
 
 A versão real serve frontend e API no mesmo endereço HTTPS, usa PostgreSQL e chama o Gemini apenas no servidor. A implantação é feita pelas telas do Neon e do Render, sem comandos:
 
 1. Crie um projeto gratuito no [Neon](https://console.neon.tech/) e copie a connection string **pooled**.
-2. Abra [Deploy to Render](https://render.com/deploy?repo=https://github.com/Raiagues/mission-dev).
+2. Abra [Deploy to Render](https://render.com/deploy?repo=https://github.com/Raiagues/norte).
 3. Em `DATABASE_URL`, cole a connection string do Neon.
 4. Em `GEMINI_API_KEY`, cole a chave criada no [Google AI Studio](https://aistudio.google.com/app/apikey).
 5. Confirme a implantação e abra o endereço `onrender.com` criado pelo Render.
