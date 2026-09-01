@@ -65,12 +65,67 @@
   box-shadow: 0 0 20px rgba(72, 147, 232, .1);
 }
 
+.brain-v2 .brain-toolbar > button.danger {
+  color: #ffc2c8;
+  border-color: rgba(235, 126, 140, .46);
+  background: rgba(92, 31, 43, .3);
+}
+
+.brain-v2 .brain-toolbar > button:disabled {
+  color: rgba(199, 216, 232, .38);
+  border-color: rgba(126, 183, 235, .2);
+  background: rgba(8, 30, 51, .5);
+  cursor: default;
+}
+
+.brain-v2 .shortcut-button {
+  position: relative;
+}
+
+.brain-v2 .shortcut-button::after {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 7px);
+  right: 0;
+  padding: 5px 8px;
+  color: #dcecff;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  content: attr(data-shortcut);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity .13s ease, transform .13s ease;
+  border: 1px solid rgba(126, 183, 235, .38);
+  background: rgba(3, 17, 30, .98);
+}
+
+.brain-v2 .shortcut-button:hover::after,
+.brain-v2 .shortcut-button:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .brain-v2 .mission-canvas {
   background:
     linear-gradient(rgba(108, 169, 226, .058) 1px, transparent 1px),
     linear-gradient(90deg, rgba(108, 169, 226, .058) 1px, transparent 1px),
     rgba(4, 18, 32, .5);
   background-size: 24px 24px, 24px 24px, auto;
+}
+
+.brain-v2 .mission-canvas.selecting {
+  cursor: crosshair;
+}
+
+.brain-v2 .selection-marquee {
+  position: absolute;
+  z-index: 35;
+  pointer-events: none;
+  border: 1px dashed rgba(114, 190, 255, .95);
+  background: rgba(61, 145, 218, .13);
+  box-shadow: 0 0 0 1px rgba(18, 76, 126, .28) inset;
 }
 
 .brain-v2 .canvas-hint {
@@ -84,11 +139,34 @@
 }
 
 .brain-v2 .mission-node {
-  min-height: 122px;
-  padding: 14px 16px 15px;
+  height: 158px;
+  min-height: 158px;
+  padding: 16px 18px 22px;
   border-color: rgba(126, 183, 235, .38);
   background: rgba(6, 25, 44, .97);
   box-shadow: 0 14px 32px rgba(0, 0, 0, .22);
+  overflow: visible;
+}
+
+.brain-v2 .mission-node.defined {
+  border-color: rgba(51, 212, 160, .62);
+  background: linear-gradient(180deg, rgba(15, 72, 61, .92), rgba(6, 25, 44, .98));
+}
+
+.brain-v2 .mission-node.hypothesis {
+  border-color: rgba(255, 194, 94, .64);
+  background: linear-gradient(180deg, rgba(78, 58, 22, .86), rgba(6, 25, 44, .98));
+}
+
+.brain-v2 .mission-node.open {
+  border-color: rgba(126, 183, 235, .56);
+  background: linear-gradient(180deg, rgba(9, 47, 82, .92), rgba(6, 25, 44, .98));
+}
+
+.brain-v2 .mission-node.closed {
+  opacity: .72;
+  border-color: rgba(158, 174, 190, .46);
+  background: linear-gradient(180deg, rgba(40, 50, 61, .84), rgba(6, 22, 38, .96));
 }
 
 .brain-v2 .mission-node.center {
@@ -120,10 +198,21 @@
   font-size: 15px;
   font-weight: 440;
   line-height: 1.48;
+  min-height: 44px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .brain-v2 .mission-node-state {
-  margin-top: 11px;
+  margin-top: 14px;
+  width: fit-content;
+  min-height: 24px;
+  border: 1px solid rgba(175, 201, 224, .24);
+  border-radius: 999px;
+  background: rgba(3, 15, 27, .45);
+  padding: 0 9px;
   color: #afc2d4;
   font-size: 10px;
   font-weight: 520;
@@ -131,15 +220,194 @@
 }
 
 .brain-v2 .mission-node-state i {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .05);
+}
+
+.brain-v2 .mission-node.defined .mission-node-state {
+  border-color: rgba(51, 212, 160, .46);
+  color: #d7fff1;
+}
+
+.brain-v2 .mission-node.hypothesis .mission-node-state {
+  border-color: rgba(255, 194, 94, .48);
+  color: #ffe6b8;
+}
+
+.brain-v2 .mission-node.open .mission-node-state {
+  border-color: rgba(126, 183, 235, .45);
+  color: #d8ecff;
+}
+
+.brain-v2 .mission-node.closed .mission-node-state {
+  border-color: rgba(158, 174, 190, .38);
+  color: #d1d8df;
 }
 
 .brain-v2 .node-connector {
   width: 17px;
   height: 17px;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
   background: #071c31;
   border-color: rgba(140, 197, 250, .74);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 3px rgba(7, 28, 49, .72);
+}
+
+.brain-v2 .mission-node.selected .node-connector {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.brain-v2 .mission-node.link-selected .node-connector {
+  opacity: .58;
+  pointer-events: auto;
+}
+
+.brain-v2 .mission-node:hover .node-connector {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brain-v2 .mission-node.selected:hover .node-connector {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.brain-v2 .mission-node.link-selected:hover .node-connector {
+  opacity: .58;
+  pointer-events: auto;
+}
+
+.brain-v2 .mission-node.drop-preview,
+.brain-v2 .mission-node.drop-preview:hover {
+  outline: 1px solid rgba(51, 212, 160, .9);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 5px rgba(51, 212, 160, .08), 0 12px 27px rgba(0, 0, 0, .17);
+}
+
+.brain-v2 .mission-node.drop-preview .node-connector,
+.brain-v2 .mission-node.drop-preview:hover .node-connector {
+  opacity: .72;
+  pointer-events: none;
+}
+
+.brain-v2 .mission-node.link-selected .node-connector.connected,
+.brain-v2 .mission-node.link-selected:hover .node-connector.connected,
+.brain-v2 .mission-node.drop-preview .node-connector.connected,
+.brain-v2 .mission-node.drop-preview:hover .node-connector.connected {
+  opacity: 1;
+  border-color: rgba(51, 212, 160, .98);
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(51, 212, 160, .14), 0 0 15px rgba(51, 212, 160, .35);
+}
+
+.brain-v2 .graph-line.invalid,
+.brain-v2 .connection-draft.invalid {
+  stroke: #ff6f7d;
+  stroke-width: 2.4;
+  stroke-dasharray: 5 4;
+  filter: drop-shadow(0 0 4px rgba(255, 72, 92, .42));
+}
+
+.brain-v2 .mission-node.drop-invalid,
+.brain-v2 .mission-node.drop-invalid:hover {
+  outline: 2px solid rgba(255, 91, 108, .92);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(255, 72, 92, .1), 0 12px 27px rgba(0, 0, 0, .2);
+  cursor: not-allowed;
+}
+
+.brain-v2 .mission-node.drop-invalid .node-connector,
+.brain-v2 .mission-node.drop-invalid:hover .node-connector {
+  opacity: .5;
+  border-color: rgba(255, 111, 125, .92);
+  pointer-events: none;
+}
+
+.brain-v2 .dragged-port-preview {
+  position: absolute;
+  z-index: 10;
+  width: 17px;
+  height: 17px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(51, 212, 160, .98);
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(51, 212, 160, .14), 0 0 15px rgba(51, 212, 160, .35);
+  pointer-events: none;
+}
+
+.brain-v2 .dragged-port-preview.invalid {
+  border-color: rgba(255, 111, 125, .98);
+  background: #351523;
+  box-shadow: 0 0 0 4px rgba(255, 72, 92, .14), 0 0 15px rgba(255, 72, 92, .38);
+}
+
+.brain-v2 .dragged-port-preview.invalid::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 7px;
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  background: #ffd9de;
+  transform: rotate(-45deg);
+}
+
+.brain-v2 .new-connection-trigger {
+  position: absolute;
+  z-index: 12;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  cursor: crosshair;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.brain-v2 .new-connection-trigger > span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border: 1px solid rgba(140, 197, 250, .68);
+  border-radius: 50%;
+  background: #061624;
+  color: rgba(220, 239, 255, .9);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: .82;
+  box-shadow: 0 0 0 3px rgba(7, 28, 49, .86), 0 0 10px rgba(98, 170, 255, .13);
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.brain-v2 .new-connection-trigger > span:hover,
+.brain-v2 .new-connection-trigger:focus-visible > span {
+  opacity: 1;
+  border-color: rgba(51, 212, 160, .98);
+  background: rgba(12, 76, 63, .98);
+  color: #e8fff7;
+  box-shadow: 0 0 0 4px rgba(51, 212, 160, .13), 0 0 14px rgba(51, 212, 160, .28);
+}
+
+.brain-v2 .new-connection-trigger.active > span {
+  opacity: 1;
+  border-color: rgba(51, 212, 160, .9);
+  color: #e8fff7;
 }
 
 .brain-v2 .brain-sidebar {
@@ -186,31 +454,53 @@
 }
 
 .brain-v2 .zoom-toolbar {
-  min-height: 52px;
+  min-height: 40px;
+  padding: 3px;
+  gap: 1px;
   color: #e1edf8;
-  font-size: 13px;
+  font-size: 11px;
   background: rgba(5, 22, 38, .94);
   border-color: rgba(126, 183, 235, .42);
 }
 
 .brain-v2 .zoom-toolbar button {
-  min-width: 46px;
-  min-height: 46px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   color: #edf6ff;
-  font-size: 19px;
+  font-size: 16px;
 }
 
-.brain-v2 .selected-link-toolbar {
-  min-height: 48px;
-  color: #dbe8f5;
-  font-size: 13px;
-  background: rgba(5, 22, 38, .94);
+.brain-v2 .zoom-toolbar button:disabled {
+  color: rgba(191, 213, 233, .3);
+  cursor: default;
 }
 
-.brain-v2 .selected-link-toolbar button {
-  min-height: 38px;
-  padding: 0 14px;
-  font-size: 12px;
+.brain-v2 .zoom-toolbar button:not(:disabled):hover,
+.brain-v2 .zoom-toolbar button.active {
+  color: #a9d8ff;
+  background: rgba(66, 145, 214, .18);
+}
+
+.brain-v2 .zoom-toolbar .zoom-value {
+  min-width: 42px;
+  font-size: 11px;
+}
+
+.brain-v2 .zoom-toolbar .toolbar-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: rgba(126, 183, 235, .24);
+}
+
+.brain-v2 .zoom-toolbar .selection-tool > i {
+  display: block;
+  width: 14px;
+  height: 12px;
+  margin: auto;
+  border: 1px dashed currentColor;
 }
 
 .brain-v2 .focus-chip button {
@@ -319,7 +609,7 @@
   }
 
   .brain-v2 .zoom-toolbar button {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 34px;
+    min-height: 34px;
   }
 }

@@ -3,7 +3,7 @@ import type { Language } from "./types";
 export const translations = {
   pt: {
     common: {
-      appName: "MISSION DEV",
+      appName: "NORTE",
       connected: "Conectado",
       userName: "Arthur Campos",
       inDevelopment: "Em desenvolvimento",
@@ -179,7 +179,7 @@ export const translations = {
   },
   en: {
     common: {
-      appName: "MISSION DEV",
+      appName: "NORTE",
       connected: "Connected",
       userName: "Arthur Campos",
       inDevelopment: "In development",
@@ -356,12 +356,12 @@ export const translations = {
 } as const;
 
 export function getStoredLanguage(): Language {
-  const stored = window.localStorage.getItem("mission-dev-language");
+  const stored = window.localStorage.getItem("norte-language") ?? window.localStorage.getItem("mission-dev-language");
   return stored === "en" ? "en" : "pt";
 }
 
 export function setStoredLanguage(language: Language): void {
-  window.localStorage.setItem("mission-dev-language", language);
+  window.localStorage.setItem("norte-language", language);
 }
 
 export function resolveText(language: Language, path: string): string {

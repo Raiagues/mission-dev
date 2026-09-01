@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist", "coverage"]
+    ignores: ["dist", "coverage", "var"]
   },
   {
     files: ["src/**/*.{ts,tsx}", "tests/**/*.ts", "vite.config.ts"],
@@ -17,6 +17,22 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
+    }
+  },
+  {
+    files: ["server/**/*.mjs", "scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        AbortSignal: "readonly",
+        URL: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        Response: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+        structuredClone: "readonly"
+      }
     }
   }
 );

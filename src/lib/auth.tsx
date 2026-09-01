@@ -1,0 +1,165 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { DEMO_USER, demoApi } from "./demoApi";
+import type { SessionUser, TeamAreaId } from "./team";
+
+const STATIC_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
+const API_ORIGIN = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/u, "");
+
+export type RegisterAccountInput = {
+  name: string;
+  email: string;
+  password: string;
+  institution: string;
+  course: string;
+  academicStage: string;
+  primaryArea: TeamAreaId;
+  skills: string[];
+  availabilityHours: number;
+  inviteCode?: string;
+};
+
+type AuthStatus = "loading" | "anonymous" | "authenticated" | "offline";
+
+type AuthContextValue = {
+  status: AuthStatus;
+  user: SessionUser | null;
+  hasOwner: boolean;
+  isDemo: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (input: RegisterAccountInput) => Promise<void>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+  api: <T>(path: string, init?: RequestInit) => Promise<T>;
+};
+
+type SessionResponse = {
+  authenticated?: boolean;
+  hasOwner?: boolean;
+  user?: SessionUser;
+  csrfToken?: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) throw new ApiError(response.status, "API_UNAVAILABLE", "A API do Norte não respondeu corretamente.");
+  const payload = await response.json() as { error?: string; message?: string } & T;
+  if (!response.ok) throw new ApiError(response.status, payload.error || "REQUEST_FAILED", payload.message || "Não foi possível concluir a solicitação.");
+  return payload;
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [hasOwner, setHasOwner] = useState(false);
+  const csrfRef = useRef("");
+
+  const api = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
+    if (STATIC_DEMO) return demoApi<T>(path, init);
+    const method = (init.method || "GET").toUpperCase();
+    const headers = new Headers(init.headers);
+    if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfRef.current) headers.set("x-csrf-token", csrfRef.current);
+    const response = await fetch(`${API_ORIGIN}/api${path}`, { ...init, headers, credentials: "include" });
+    const payload = await parseResponse<T>(response);
+    return payload;
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (STATIC_DEMO) {
+      setHasOwner(true);
+      setUser(DEMO_USER);
+      setStatus("authenticated");
+      return;
+    }
+    try {
+      const response = await api<SessionResponse>("/auth/session");
+      setHasOwner(Boolean(response.hasOwner));
+      if (response.authenticated && response.user && response.csrfToken) {
+        csrfRef.current = response.csrfToken;
+        setUser(response.user);
+        setStatus("authenticated");
+      } else {
+        csrfRef.current = "";
+        setUser(null);
+        setStatus("anonymous");
+      }
+    } catch {
+      csrfRef.current = "";
+      setUser(null);
+      setStatus("offline");
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    if (STATIC_DEMO) {
+      setUser(DEMO_USER);
+      setHasOwner(true);
+      setStatus("authenticated");
+      return;
+    }
+    const response = await api<{ user: SessionUser; csrfToken: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    csrfRef.current = response.csrfToken;
+    setUser(response.user);
+    setHasOwner(true);
+    setStatus("authenticated");
+  }, [api]);
+
+  const register = useCallback(async (input: RegisterAccountInput) => {
+    if (STATIC_DEMO) {
+      setUser(DEMO_USER);
+      setHasOwner(true);
+      setStatus("authenticated");
+      return;
+    }
+    const response = await api<{ user: SessionUser; csrfToken: string }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+    csrfRef.current = response.csrfToken;
+    setUser(response.user);
+    setHasOwner(true);
+    setStatus("authenticated");
+  }, [api]);
+
+  const logout = useCallback(async () => {
+    if (STATIC_DEMO) return;
+    try {
+      await api<void>("/auth/logout", { method: "POST" });
+    } finally {
+      csrfRef.current = "";
+      setUser(null);
+      setStatus("anonymous");
+    }
+  }, [api]);
+
+  const value = useMemo<AuthContextValue>(() => ({ status, user, hasOwner, isDemo: STATIC_DEMO, login, register, logout, refresh, api }), [status, user, hasOwner, login, register, logout, refresh, api]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("useAuth must be used inside AuthProvider.");
+  return value;
+}

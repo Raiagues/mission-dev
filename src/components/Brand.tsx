@@ -2,7 +2,7 @@ export function Brand() {
   return (
     <div className="brand">
       <span className="brand-mark" />
-      <span>ORBITAL</span>
+      <span>NORTE</span>
     </div>
   );
 }

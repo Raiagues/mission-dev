@@ -1,15 +1,9 @@
-name: CD · GitHub Pages
+name: CD - GitHub Pages Demo
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-  statuses: write
 
 concurrency:
   group: github-pages
@@ -17,47 +11,57 @@ concurrency:
 
 jobs:
   build:
-    name: Quality gate and production build
+    name: Build verified browser demo
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      VITE_DEMO_MODE: "true"
+      VITE_BASE_PATH: /${{ github.event.repository.name }}/
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 22
+          node-version: 24.20.0
           cache: npm
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Quality gate
+      - name: Verify and build demo
         run: npm run quality
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: ./dist
 
   deploy:
-    name: Deploy and verify production
+    name: Deploy and verify
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
-      - name: Verify live application
+      - name: Verify live page and assets
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
@@ -69,40 +73,30 @@ jobs:
           import urllib.request
 
           page_url = os.environ["PAGE_URL"]
-          html = ""
+          headers = {"User-Agent": "norte-pages-check"}
           last_error = None
-          headers = {"User-Agent": "orbital-deploy-check"}
 
-          for attempt in range(18):
+          for _ in range(18):
               try:
                   request = urllib.request.Request(page_url, headers=headers)
                   with urllib.request.urlopen(request, timeout=20) as response:
                       html = response.read().decode("utf-8")
-                  if "<title>Orbital</title>" in html and 'id="root"' in html:
+                  if "<title>Norte</title>" in html and 'id="root"' in html:
                       break
               except Exception as error:
                   last_error = error
               time.sleep(10)
           else:
-              raise RuntimeError(f"Live page did not become healthy. Last error: {last_error}")
+              raise RuntimeError(f"Norte did not become healthy: {last_error}")
 
           assets = re.findall(r'(?:src|href)="([^"]+\.(?:js|css))"', html)
           if not assets:
-              raise RuntimeError("No JavaScript or CSS production assets were referenced by the live page.")
-
+              raise RuntimeError("No production JavaScript or CSS assets were found.")
           for asset in assets:
               asset_url = urllib.parse.urljoin(page_url, asset)
               request = urllib.request.Request(asset_url, headers=headers)
               with urllib.request.urlopen(request, timeout=20) as response:
                   if response.status != 200:
                       raise RuntimeError(f"Asset failed with HTTP {response.status}: {asset_url}")
-
-          print(f"Verified Orbital live page and {len(assets)} production assets at {page_url}")
+          print(f"Verified Norte and {len(assets)} assets at {page_url}")
           PY
-
-      - name: Publish verified deployment status
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=orbital/pages-live -f description="GitHub Pages deployed and live assets verified" -f target_url="${PAGE_URL}"

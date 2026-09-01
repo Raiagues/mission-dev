@@ -11,24 +11,25 @@
 }
 
 .brain-v2 .zoom-toolbar {
-  min-height: 58px;
-  padding: 0 6px;
-  gap: 4px;
-  font-size: 14px;
+  min-height: 40px;
+  padding: 3px;
+  gap: 1px;
+  font-size: 11px;
 }
 
 .brain-v2 .zoom-toolbar button {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  font-size: 22px;
-  border-radius: 5px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  font-size: 16px;
+  border-radius: 4px;
 }
 
 .brain-v2 .zoom-toolbar span {
-  min-width: 64px;
+  min-width: 42px;
   text-align: center;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 540;
 }
 
@@ -58,12 +59,6 @@
 
 .brain-v2 .focus-chip button {
   min-height: 44px;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.brain-v2 .selected-link-toolbar button {
-  min-height: 42px;
   padding: 0 16px;
   font-size: 13px;
 }
@@ -133,13 +128,17 @@
     font-size: 12px;
   }
 
+  .brain-v2 .brain-toolbar > button:first-child {
+    grid-column: 1 / -1;
+  }
+
   .brain-v2 .zoom-toolbar {
-    min-height: 60px;
+    min-height: 40px;
   }
 
   .brain-v2 .zoom-toolbar button {
-    width: 50px;
-    height: 50px;
+    width: 34px;
+    height: 34px;
   }
 
   .brain-v2 .brain-footer button {

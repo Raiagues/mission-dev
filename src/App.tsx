@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MissionSidebar } from "./components/MissionSidebar";
 import { HomePage } from "./pages/HomePage";
 import { StudySetupPage } from "./pages/StudySetupPage";
 import { BrainstormPage } from "./pages/BrainstormPage";
+import { useAuth } from "./lib/auth";
 import { getStoredLanguage, resolveText, setStoredLanguage } from "./lib/i18n";
 import { loadProject, prepareProjectForConception, saveProject } from "./lib/projectStore";
 import type { MissionProject } from "./lib/projectStore";
@@ -18,10 +19,55 @@ function getRoute(): Route {
 }
 
 export function App() {
+  const auth = useAuth();
   const [language, setLanguage] = useState<Language>(getStoredLanguage);
   const [project, setProject] = useState<MissionProject>(() => loadProject(getStoredLanguage()));
   const [route, setRoute] = useState<Route>(getRoute);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const projectRef = useRef(project);
+  const saveTimerRef = useRef<number | null>(null);
+  const cloudReadyRef = useRef(false);
+
+  const flushProject = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    projectRef.current = saveProject(projectRef.current);
+    if (cloudReadyRef.current) {
+      void auth.api("/workspace/project", { method: "PUT", body: JSON.stringify(projectRef.current) }).catch(() => undefined);
+    }
+  }, [auth.api]);
+
+  const changeProject = useCallback((nextProject: MissionProject) => {
+    projectRef.current = nextProject;
+    setProject(nextProject);
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(flushProject, 180);
+  }, [flushProject]);
+
+  useEffect(() => {
+    let cancelled = false;
+    cloudReadyRef.current = false;
+    void auth.api<{ project: MissionProject | null }>("/workspace/project")
+      .then(async ({ project: remoteProject }) => {
+        if (cancelled) return;
+        if (remoteProject?.schemaVersion === 2) {
+          projectRef.current = remoteProject;
+          setProject(saveProject(remoteProject));
+        } else {
+          await auth.api("/workspace/project", { method: "PUT", body: JSON.stringify(projectRef.current) });
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) cloudReadyRef.current = true;
+      });
+    return () => {
+      cancelled = true;
+      cloudReadyRef.current = false;
+    };
+  }, [auth.api, auth.user?.id]);
 
   useEffect(() => {
     function onHashChange() {
@@ -33,9 +79,25 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveProject(project), 180);
-    return () => window.clearTimeout(timer);
-  }, [project]);
+    function saveBeforeLeaving() {
+      flushProject();
+    }
+
+    function saveWhenHidden() {
+      if (document.visibilityState === "hidden") flushProject();
+    }
+
+    saveTimerRef.current = window.setTimeout(flushProject, 180);
+    window.addEventListener("pagehide", saveBeforeLeaving);
+    window.addEventListener("beforeunload", saveBeforeLeaving);
+    document.addEventListener("visibilitychange", saveWhenHidden);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforeLeaving);
+      window.removeEventListener("beforeunload", saveBeforeLeaving);
+      document.removeEventListener("visibilitychange", saveWhenHidden);
+      flushProject();
+    };
+  }, [flushProject]);
 
   useLayoutEffect(() => {
     const legacySelectors = [".app-page .home-sidebar", ".app-page .setup-sidebar", ".app-page .brain-sidebar", ".app-page .sidebar-overlay", ".app-page .square-menu", ".app-page .mobile-menu"];
@@ -60,8 +122,8 @@ export function App() {
   }
 
   function openBrainstorm() {
-    const prepared = prepareProjectForConception(project, language);
-    setProject(prepared);
+    const prepared = prepareProjectForConception(projectRef.current, language);
+    changeProject(prepared);
     window.location.hash = "#/brainstorming";
   }
 
@@ -75,8 +137,8 @@ export function App() {
   }
 
   let page = <HomePage language={language} t={t} onLanguageChange={changeLanguage} onOpenBrainstorm={openSetup} />;
-  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={setProject} onContinue={openBrainstorm} onHome={openHome} />;
-  if (route === "brainstorm") page = <BrainstormPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={setProject} onHome={openHome} onBackSetup={openSetup} />;
+  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openBrainstorm} onHome={openHome} />;
+  if (route === "brainstorm") page = <BrainstormPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onHome={openHome} onBackSetup={openSetup} />;
 
   return (
     <div className={sidebarExpanded ? `app-shell route-${route} sidebar-expanded` : `app-shell route-${route}`}>

@@ -22,6 +22,10 @@ export type MissionLink = {
   from: number;
   to: number;
   type: LinkType;
+  sourceSide?: "top" | "right" | "bottom" | "left";
+  targetSide?: "top" | "right" | "bottom" | "left";
+  sourceOrder?: number;
+  targetOrder?: number;
 };
 
 export type IssueSuggestion = {

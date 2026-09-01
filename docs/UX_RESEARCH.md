@@ -1,6 +1,6 @@
 # Early mission conception research notes
 
-This document records the engineering rationale behind the conception workflow used by Mission Dev.
+This document records the engineering rationale behind the conception workflow used by Norte.
 
 ## Why the platform starts with framing rather than hardware
 
@@ -8,7 +8,7 @@ NASA systems engineering guidance starts system design by collecting and clarify
 
 ESA's Concurrent Design Facility follows the same early-phase logic. MiCRA studies exist specifically to clarify novel mission ideas before a full conceptual design study, identifying main drivers, constraints and first trade-offs. The CDF works from a common design model that evolves as decisions are made so impacts across disciplines remain visible.
 
-Mission Dev therefore separates the workflow into two layers.
+Norte therefore separates the workflow into two layers.
 
 1. Study setup establishes the rules and context of the study.
 2. The conception room explores the problem and its branches without forcing premature spacecraft choices.
@@ -19,7 +19,7 @@ The intermediate Study Setup page is not a questionnaire about spacecraft implem
 
 - Study intent. Problem-driven mission, technology demonstration, science/exploration or open exploration.
 - Starting statement. A short description of what motivated the study. This is not treated as a formal mission description.
-- Governing framework. A standard Mission Dev early-mission framework or a project-specific custom definition model.
+- Governing framework. A standard Norte early-mission framework or a project-specific custom definition model.
 - Project references. Standards, templates or internal references that define how the project should be evaluated.
 
 This follows the principle that assumptions, constraints, applicable standards and success criteria should be explicit and traceable instead of hidden in a conversation history.

@@ -1,10 +1,10 @@
 # Contributing
 
-Mission Dev uses a small mandatory quality gate for every change.
+Norte uses a mandatory quality gate for every change.
 
 ## Development
 
-Use Node.js 22 or newer.
+Use Node.js 24.20 or newer.
 
 ```bash
 npm install

@@ -55,7 +55,7 @@ export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Pr
         <section className="home-hero home-hero-no-artwork">
           <span className="tech-corner tl" /><span className="tech-corner tr" /><span className="tech-corner bl" /><span className="tech-corner br" />
           <div className="home-title">
-            <h1>ORBITAL</h1>
+            <h1>NORTE</h1>
           </div>
 
           <div className="home-action-grid">

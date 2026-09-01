@@ -1,14 +1,18 @@
-.memory-reference-heading .modal-eyebrow {
-  color: #9dcbff;
-  font-size: 10px;
-  letter-spacing: .11em;
-}
-
 .memory-reference-heading h1 {
   color: #f6faff;
-  font-size: clamp(34px, 3vw, 46px) !important;
+  font-size: clamp(32px, 3vw, 44px) !important;
   font-weight: 430;
   line-height: 1.08;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.memory-reference-heading p {
+  max-width: 760px;
+  color: #9dcbff;
+  font-size: 13px;
+  font-weight: 420;
+  line-height: 1.45;
 }
 
 .memory-program-label,
@@ -36,7 +40,7 @@
   min-height: 0;
   height: 100%;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .memory-program-badge {
@@ -233,7 +237,7 @@
   }
 
   .memory-program-badge {
-    width: 66px;
+    width: 76px;
     height: 66px;
   }
 

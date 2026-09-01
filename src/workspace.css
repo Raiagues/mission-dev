@@ -173,6 +173,7 @@
 .graph-line.suggestion { stroke: rgba(165,156,255,.78); stroke-dasharray: 6 5; }
 .graph-line.issue-related { stroke: rgba(223,124,124,.64); }
 .graph-line.selected { stroke: rgba(174,222,255,1); stroke-width: 3; filter: drop-shadow(0 0 3px rgba(98,170,255,.42)); }
+.graph-line.connection-preview { stroke: var(--green); stroke-width: 2.2; stroke-dasharray: 6 5; filter: drop-shadow(0 0 3px rgba(51,212,160,.34)); }
 .graph-line-hit { fill: none; stroke: rgba(255,255,255,.001); stroke-width: 28; pointer-events: stroke; cursor: pointer; }
 .issue-relation { fill: none; stroke: rgba(223,124,124,.54); stroke-width: 1.5; stroke-dasharray: 4 7; pointer-events: none; }
 .issue-relation-hit { fill: none; stroke: rgba(255,255,255,.001); stroke-width: 24; pointer-events: stroke; cursor: pointer; }
@@ -224,9 +225,6 @@
 .zoom-toolbar button { width: 32px; height: 29px; border: 0; background: transparent; cursor: pointer; }
 .zoom-toolbar button:hover { background: rgba(98,170,255,.1); }
 .zoom-toolbar span { min-width: 48px; color: var(--muted); text-align: center; font-size: 9px; }
-.selected-link-toolbar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 26; border: 1px solid var(--line-strong); background: rgba(5,21,36,.96); padding: 6px 8px; display: flex; align-items: center; gap: 8px; }
-.selected-link-toolbar span { color: var(--muted); font-size: 9px; }
-.selected-link-toolbar button { border: 0; background: transparent; color: #f0a1a1; cursor: pointer; font-size: 9px; }
 
 .drawer-scrim { position: absolute; inset: 0; z-index: 38; border: 0; background: rgba(0,7,13,.18); padding: 0; }
 .workspace-drawer { position: absolute; z-index: 40; top: 0; right: 0; width: min(410px, 90%); height: 100%; overflow-y: auto; border-left: 1px solid var(--line-strong); background: rgba(4,17,30,.99); padding: 18px; box-shadow: -20px 0 48px rgba(0,0,0,.2); }
@@ -386,7 +384,6 @@
   .node-connector.bottom { bottom: -11px; }
   .node-connector.left { left: -11px; }
   .node-connector.right { right: -11px; }
-  .selected-link-toolbar { bottom: 10px; white-space: nowrap; }
   .zoom-toolbar { right: 8px; bottom: 8px; }
   .brain-footer > span { display: none; }
   .brain-footer > div { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }

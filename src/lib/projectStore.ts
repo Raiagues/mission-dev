@@ -46,7 +46,7 @@ export type MissionProject = {
   setup: {
     intent: StudyIntent;
     statement: string;
-    framework: "mission-dev-core" | "custom";
+    framework: "norte-core" | "mission-dev-core" | "custom";
     references: ProjectReference[];
   };
   board: {
@@ -71,7 +71,8 @@ export type VirtualProjectFile = {
   content: unknown;
 };
 
-const STORAGE_KEY = "mission-dev-project-v2";
+const STORAGE_KEY = "norte-project-v2";
+const LEGACY_STORAGE_KEY = "mission-dev-project-v2";
 
 function uid(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}-${crypto.randomUUID()}`;
@@ -93,7 +94,7 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
     setup: {
       intent: "problem",
       statement: "",
-      framework: "mission-dev-core",
+      framework: "norte-core",
       references: []
     },
     board: {
@@ -107,7 +108,7 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
     studies: [],
     resolvedIssueKeys: [],
     templates: {
-      activeTemplateId: "mission-dev-core-v1",
+      activeTemplateId: "norte-core-v1",
       lockedPaths: []
     }
   };
@@ -115,12 +116,13 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
 
 export function loadProject(language: Language = "pt"): MissionProject {
   if (typeof window === "undefined") return createEmptyProject(language);
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return createEmptyProject(language);
 
   try {
     const parsed = JSON.parse(raw) as MissionProject;
     if (parsed.schemaVersion !== 2) return createEmptyProject(language);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     return parsed;
   } catch {
     return createEmptyProject(language);
@@ -134,7 +136,10 @@ export function saveProject(project: MissionProject): MissionProject {
 }
 
 export function clearStoredProject(): void {
-  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  }
 }
 
 function node(id: number, x: number, y: number, title: string, kickerKey: string, state: NodeState, type: MissionNode["type"] = "normal", bucket: MissionNode["bucket"] = "main", width = 250): MissionNode {

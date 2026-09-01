@@ -575,10 +575,6 @@ body {
     bottom: 8px;
   }
 
-  .selected-link-toolbar {
-    max-width: calc(100% - 16px);
-  }
-
   .workspace-drawer {
     position: absolute;
     inset: auto 0 0 0;

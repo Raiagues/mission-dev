@@ -1,25 +1,24 @@
 # Architecture
 
-Mission Dev is currently implemented as a client-side React application with a domain layer that is independent from the interface.
+Norte is a React and Vite client backed by a Fastify API. Production serves both from one HTTPS origin.
 
-## Layers
+## Client
 
-### Presentation
+React pages render the mission memory and conception workspaces. `src/lib/missionModel.ts` keeps deterministic engineering rules separate from interface state. Local storage remains an offline fallback and migrates the previous Mission Dev keys without discarding browser data.
 
-React pages and reusable components render the home screen, navigation, technical drawings, language controls and the conception board.
+## API
 
-### Mission domain model
+`server/app.mjs` owns authentication, authorization, team profiles, artifacts, workspace persistence and the private Gemini proxy. JSON Schema validates public request boundaries and Swagger documents the API at `/docs`.
 
-`src/lib/missionModel.ts` contains deterministic rules for the current Problem phase. It calculates definition progress, checks mandatory evidence, detects inconsistencies, controls phase validation and determines which nodes belong to a focused project page.
+## Persistence
 
-### Localization
+Local development uses an atomic JSON file. When `DATABASE_URL` exists, `server/postgres-store.mjs` stores the same versioned state in PostgreSQL with transactions and row locking. Accounts, hashed sessions, project documents and exploration maps survive restarts.
 
-`src/lib/i18n.ts` owns all platform-controlled Portuguese and English strings. User-created content is stored separately and is never rewritten when the interface language changes.
+## Delivery
 
-### Deployment
+- GitHub Pages builds a browser-only demonstration with local data and no secrets.
+- Render builds the production bundle and serves it with the Fastify API.
+- Neon supplies persistent PostgreSQL for the hosted service.
+- GitHub Actions runs quality and security checks before Pages or Render deployment.
 
-Vite produces the static production bundle in `dist`. GitHub Actions validates the repository before uploading that directory to GitHub Pages.
-
-## Evolution
-
-The domain boundary is intentional. Future persistence, collaboration and model-assisted engineering services can be introduced behind an API while preserving the conception model and UI contracts.
+The current cloud state represents one team. Multi-tenant separation is required before multiple independent organizations share one deployment.
