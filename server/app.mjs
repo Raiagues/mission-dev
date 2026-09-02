@@ -35,19 +35,20 @@ const profileProperties = {
   missionRole: string(60),
   primaryArea: string(80),
   secondaryAreas: stringList(6, 80),
-  institution: string(160, 2),
+  institution: string(160),
   course: string(120),
   academicStage: string(80),
   skills: stringList(16, 60),
   availabilityHours: { type: "integer", minimum: 0, maximum: 80 },
   notes: string(800),
+  avatarUrl: string(300_000),
   accountStatus: { type: "string", enum: MEMBER_STATUSES }
 };
 
 const registerBody = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "email", "password", "institution"],
+  required: ["name", "email", "password"],
   properties: {
     name: string(100, 2),
     email: string(254, 3),
@@ -57,8 +58,7 @@ const registerBody = {
     academicStage: string(80),
     primaryArea: string(80),
     skills: stringList(16, 60),
-    availabilityHours: { type: "integer", minimum: 0, maximum: 80 },
-    inviteCode: string(80)
+    availabilityHours: { type: "integer", minimum: 0, maximum: 80 }
   }
 };
 
@@ -66,7 +66,7 @@ const memberBody = {
   type: "object",
   additionalProperties: false,
   required: ["email"],
-  properties: profileProperties
+  properties: { ...profileProperties, teamId: string(100) }
 };
 
 const memberPatchBody = {
@@ -76,12 +76,35 @@ const memberPatchBody = {
   properties: { ...profileProperties, accessRole: { type: "string", enum: ACCESS_ROLES } }
 };
 
+const ownProfileBody = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: {
+    displayName: string(100, 2),
+    institution: string(160),
+    course: string(120),
+    academicStage: string(80),
+    availabilityHours: { type: "integer", minimum: 0, maximum: 80 },
+    avatarUrl: string(300_000)
+  }
+};
+
 const artifactProperties = {
   kind: { type: "string", enum: ARTIFACT_KINDS },
   label: string(140, 2),
   url: string(1000, 1),
   description: string(500),
-  tags: stringList(12, 50)
+  tags: stringList(12, 50),
+  scope: { type: "string", enum: ["team", "project"] },
+  ownerId: { anyOf: [string(100, 1), { type: "null" }] }
+};
+
+const teamBody = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name"],
+  properties: { name: string(100, 2), description: string(300) }
 };
 
 const artifactBody = {
@@ -134,6 +157,18 @@ function validateArtifactUrl(value) {
   }
 }
 
+function validateAvatarUrl(value) {
+  if (!value) return true;
+  if (/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/u.test(value)) return value.length <= 300_000;
+  if (/^\/[a-zA-Z0-9_./-]+$/u.test(value) && !value.includes("..")) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function hashToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -157,7 +192,9 @@ function publicUser(user) {
     email: user.email,
     accessRole: user.accessRole,
     institution: user.institution,
-    primaryArea: user.primaryArea
+    primaryArea: user.primaryArea,
+    avatarUrl: user.avatarUrl || "",
+    profileComplete: Boolean(user.institution && user.course && user.academicStage)
   };
 }
 
@@ -191,6 +228,7 @@ function cleanMemberInput(body) {
     skills: normalizeList(body.skills),
     availabilityHours: Number.isInteger(body.availabilityHours) ? body.availabilityHours : 0,
     notes: normalizeText(body.notes || ""),
+    avatarUrl: normalizeText(body.avatarUrl || ""),
     accountStatus: body.accountStatus || "invited"
   };
 }
@@ -203,7 +241,9 @@ function cleanArtifactInput(body) {
     label: normalizeText(body.label),
     url,
     description: normalizeText(body.description || ""),
-    tags: normalizeList(body.tags)
+    tags: normalizeList(body.tags),
+    scope: body.scope === "team" ? "team" : "project",
+    ownerId: normalizeText(body.ownerId || null)
   };
 }
 
@@ -338,11 +378,45 @@ export async function buildApp(options = {}) {
 
   function requireTeamRole(user, allowedAccessRoles, allowedProjectRoles) {
     if (allowedAccessRoles.includes(user.accessRole)) return;
-    const assignments = store.read().workspace.project?.document?.context?.assignments;
-    const assignment = Array.isArray(assignments) ? assignments.find((item) => item.memberId === user.memberId) : null;
-    if (!assignment || !allowedProjectRoles.includes(assignment.roleId)) {
+    const data = store.read();
+    const records = Object.values(data.workspace.projects || {});
+    const allowed = records.some((record) => record?.document?.context?.assignments?.some((item) => item.memberId === user.memberId && allowedProjectRoles.includes(item.roleId)));
+    if (!allowed) {
       throw httpError(403, "FORBIDDEN", "Your project role cannot perform this action.");
     }
+  }
+
+  function canManageNamedTeam(data, user, team) {
+    if (user.accessRole === "owner_admin") return true;
+    if (team?.createdBy === user.id) return true;
+    if (team?.memberIds.includes(user.memberId) && ["captain", "manager"].includes(user.accessRole)) return true;
+    return Object.values(data.workspace.projects || {}).some((record) => {
+      const context = record?.document?.context;
+      return context?.teamId === team?.id && context.assignments?.some((item) => item.memberId === user.memberId && ["captain", "manager"].includes(item.roleId));
+    });
+  }
+
+  function requireNamedTeamManager(data, user, team) {
+    if (!team || !canManageNamedTeam(data, user, team)) throw httpError(403, "FORBIDDEN", "You cannot manage this team.");
+  }
+
+  function canAccessProject(data, user, record) {
+    if (user.accessRole === "owner_admin" || record?.createdBy === user.id || record?.updatedBy === user.id) return true;
+    const teamId = record?.document?.context?.teamId;
+    const team = data.teams.find((item) => item.id === teamId);
+    return Boolean(team?.memberIds.includes(user.memberId));
+  }
+
+  function projectSummary(record) {
+    const project = record.document;
+    return {
+      id: project.id,
+      name: project.name || "Projeto sem título",
+      programId: project.context?.programId ?? null,
+      teamId: project.context?.teamId ?? null,
+      updatedAt: record.updatedAt || project.updatedAt,
+      memberCount: Array.isArray(project.context?.assignments) ? project.context.assignments.length : 0
+    };
   }
 
   app.addHook("onRequest", async (request) => {
@@ -384,7 +458,6 @@ export async function buildApp(options = {}) {
     const body = request.body;
     const email = normalizeEmail(body.email);
     const password = normalizePassword(body.password);
-    const inviteCode = normalizeText(body.inviteCode || "").toUpperCase();
     if (!validateEmail(email)) throw httpError(400, "INVALID_EMAIL", "Enter a valid email address.");
     if (!validatePassword(password)) throw httpError(400, "WEAK_PASSWORD", `Use a passphrase with at least ${PASSWORD_MIN_LENGTH} characters.`);
     const passwordHash = await argon2.hash(password, {
@@ -398,13 +471,7 @@ export async function buildApp(options = {}) {
       if (data.users.some((item) => item.email === email)) throw httpError(409, "EMAIL_EXISTS", "An account already uses this email.");
       const timestamp = new Date().toISOString();
       const isFirstAccount = !data.users.some((item) => item.accessRole === "owner_admin" && item.active);
-      const invitedMember = isFirstAccount ? null : data.members.find((item) => item.email === email && !item.accountId);
-      if (!isFirstAccount) {
-        const invitationValid = invitedMember?.invitationCodeHash
-          && invitedMember.invitationExpiresAt > timestamp
-          && constantTimeTextEqual(invitedMember.invitationCodeHash, hashToken(inviteCode));
-        if (!invitationValid) throw httpError(403, "INVITATION_REQUIRED", "Use the active invitation code for this email address.");
-      }
+      const invitedMember = data.members.find((item) => item.email === email && !item.accountId);
       const memberId = invitedMember?.id || randomUUID();
       const nextUser = {
         id: randomUUID(),
@@ -413,7 +480,11 @@ export async function buildApp(options = {}) {
         email,
         passwordHash,
         accessRole: isFirstAccount ? "owner_admin" : invitedMember?.missionRole === "advisor" ? "advisor" : "member",
-        institution: normalizeText(body.institution),
+        institution: normalizeText(body.institution || ""),
+        course: normalizeText(body.course || ""),
+        academicStage: normalizeText(body.academicStage || ""),
+        availabilityHours: Number.isInteger(body.availabilityHours) ? body.availabilityHours : 0,
+        avatarUrl: normalizeText(body.avatarUrl || ""),
         primaryArea: invitedMember?.primaryArea || body.primaryArea || "systems",
         active: true,
         createdAt: timestamp,
@@ -429,6 +500,7 @@ export async function buildApp(options = {}) {
         invitedMember.academicStage = normalizeText(body.academicStage || invitedMember.academicStage || "");
         invitedMember.skills = normalizeList(body.skills).length ? normalizeList(body.skills) : invitedMember.skills;
         invitedMember.availabilityHours = Number.isInteger(body.availabilityHours) ? body.availabilityHours : invitedMember.availabilityHours;
+        invitedMember.avatarUrl = normalizeText(body.avatarUrl || invitedMember.avatarUrl || "");
         invitedMember.accountStatus = "active";
         invitedMember.updatedAt = timestamp;
         delete invitedMember.invitationCodeHash;
@@ -448,10 +520,16 @@ export async function buildApp(options = {}) {
           skills: normalizeList(body.skills),
           availabilityHours: Number.isInteger(body.availabilityHours) ? body.availabilityHours : 0,
           notes: "",
+          avatarUrl: normalizeText(body.avatarUrl || ""),
           accountStatus: "active",
           createdAt: timestamp,
           updatedAt: timestamp
         });
+      }
+      if (isFirstAccount && data.teams[0]) {
+        data.teams[0].memberIds = [...new Set([...data.teams[0].memberIds, memberId])];
+        data.teams[0].createdBy ||= nextUser.id;
+        data.teams[0].updatedAt = timestamp;
       }
       return nextUser;
     });
@@ -498,65 +576,244 @@ export async function buildApp(options = {}) {
     reply.code(204).send();
   });
 
+  app.get("/api/profile", {
+    preHandler: [requireAuth],
+    schema: { tags: ["Authentication"], summary: "Read the current academic profile", security: [{ sessionCookie: [] }] }
+  }, async (request) => {
+    const data = store.read();
+    const member = data.members.find((item) => item.id === request.auth.user.memberId);
+    if (!member) throw httpError(404, "PROFILE_NOT_FOUND", "Your profile was not found.");
+    return { profile: publicMember(data, member) };
+  });
+
+  app.patch("/api/profile", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: { tags: ["Authentication"], summary: "Update the current academic profile", security: [{ sessionCookie: [], csrfToken: [] }], body: ownProfileBody }
+  }, async (request) => {
+    if (request.body.avatarUrl !== undefined && !validateAvatarUrl(request.body.avatarUrl)) {
+      throw httpError(400, "INVALID_AVATAR", "Use a valid profile image.");
+    }
+    const profile = await store.update((data) => {
+      const member = data.members.find((item) => item.id === request.auth.user.memberId);
+      const user = data.users.find((item) => item.id === request.auth.user.id);
+      if (!member || !user) throw httpError(404, "PROFILE_NOT_FOUND", "Your profile was not found.");
+      for (const key of ["displayName", "institution", "course", "academicStage", "avatarUrl"]) {
+        if (request.body[key] !== undefined) member[key] = normalizeText(request.body[key]);
+      }
+      if (request.body.availabilityHours !== undefined) member.availabilityHours = request.body.availabilityHours;
+      user.name = member.displayName;
+      user.institution = member.institution;
+      user.course = member.course;
+      user.academicStage = member.academicStage;
+      user.availabilityHours = member.availabilityHours;
+      user.avatarUrl = member.avatarUrl || "";
+      member.updatedAt = new Date().toISOString();
+      user.updatedAt = member.updatedAt;
+      return member;
+    });
+    const data = store.read();
+    return { profile: publicMember(data, profile), user: publicUser(data.users.find((item) => item.id === request.auth.user.id)) };
+  });
+
+  app.get("/api/teams", {
+    preHandler: [requireAuth],
+    schema: { tags: ["Team"], summary: "List available and associated teams", security: [{ sessionCookie: [] }] }
+  }, async (request) => {
+    const data = store.read();
+    return {
+      teams: data.teams.map((team) => ({
+        ...team,
+        membership: team.memberIds.includes(request.auth.user.memberId) ? "member" : team.joinRequests.includes(request.auth.user.memberId) ? "requested" : "available",
+        canManage: canManageNamedTeam(data, request.auth.user, team)
+      }))
+    };
+  });
+
+  app.post("/api/teams", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: { tags: ["Team"], summary: "Create a team", security: [{ sessionCookie: [], csrfToken: [] }], body: teamBody }
+  }, async (request, reply) => {
+    const team = await store.update((data) => {
+      const timestamp = new Date().toISOString();
+      const next = {
+        id: randomUUID(),
+        name: normalizeText(request.body.name),
+        description: normalizeText(request.body.description || ""),
+        memberIds: [request.auth.user.memberId],
+        artifactIds: [],
+        joinRequests: [],
+        createdBy: request.auth.user.id,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+      data.teams.push(next);
+      return next;
+    });
+    reply.code(201);
+    return { team: { ...team, membership: "member", canManage: true } };
+  });
+
+  app.patch("/api/teams/:id", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: {
+      tags: ["Team"], summary: "Update a team", security: [{ sessionCookie: [], csrfToken: [] }],
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(100, 1) } },
+      body: { type: "object", additionalProperties: false, minProperties: 1, properties: { name: string(100, 2), description: string(300) } }
+    }
+  }, async (request) => {
+    const team = await store.update((data) => {
+      const existing = data.teams.find((item) => item.id === request.params.id);
+      requireNamedTeamManager(data, request.auth.user, existing);
+      if (request.body.name !== undefined) existing.name = normalizeText(request.body.name);
+      if (request.body.description !== undefined) existing.description = normalizeText(request.body.description);
+      existing.updatedAt = new Date().toISOString();
+      return existing;
+    });
+    return { team };
+  });
+
+  app.post("/api/teams/:id/join-requests", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: {
+      tags: ["Team"], summary: "Request team membership", security: [{ sessionCookie: [], csrfToken: [] }],
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(100, 1) } }
+    }
+  }, async (request) => {
+    const team = await store.update((data) => {
+      const existing = data.teams.find((item) => item.id === request.params.id);
+      if (!existing) throw httpError(404, "TEAM_NOT_FOUND", "Team was not found.");
+      if (!existing.memberIds.includes(request.auth.user.memberId)) existing.joinRequests = [...new Set([...existing.joinRequests, request.auth.user.memberId])];
+      existing.updatedAt = new Date().toISOString();
+      return existing;
+    });
+    return { team };
+  });
+
+  app.post("/api/teams/:id/members", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: {
+      tags: ["Team"], summary: "Add an existing profile to a team", security: [{ sessionCookie: [], csrfToken: [] }],
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(100, 1) } },
+      body: { type: "object", additionalProperties: false, required: ["memberId"], properties: { memberId: string(100, 1) } }
+    }
+  }, async (request) => {
+    const team = await store.update((data) => {
+      const existing = data.teams.find((item) => item.id === request.params.id);
+      requireNamedTeamManager(data, request.auth.user, existing);
+      if (!data.members.some((member) => member.id === request.body.memberId)) throw httpError(404, "MEMBER_NOT_FOUND", "Team member was not found.");
+      existing.memberIds = [...new Set([...existing.memberIds, request.body.memberId])];
+      existing.joinRequests = existing.joinRequests.filter((memberId) => memberId !== request.body.memberId);
+      existing.updatedAt = new Date().toISOString();
+      return existing;
+    });
+    return { team };
+  });
+
+  app.delete("/api/teams/:id/members/:memberId", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: {
+      tags: ["Team"], summary: "Remove a profile from a team without deleting the account", security: [{ sessionCookie: [], csrfToken: [] }],
+      params: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "memberId"],
+        properties: { id: string(100, 1), memberId: string(100, 1) }
+      }
+    }
+  }, async (request, reply) => {
+    await store.update((data) => {
+      const team = data.teams.find((item) => item.id === request.params.id);
+      requireNamedTeamManager(data, request.auth.user, team);
+      if (!team.memberIds.includes(request.params.memberId)) throw httpError(404, "MEMBER_NOT_FOUND", "This profile is not part of the team.");
+      team.memberIds = team.memberIds.filter((memberId) => memberId !== request.params.memberId);
+      team.joinRequests = team.joinRequests.filter((memberId) => memberId !== request.params.memberId);
+      team.updatedAt = new Date().toISOString();
+      for (const record of Object.values(data.workspace.projects || {})) {
+        if (record?.document?.context?.teamId !== team.id) continue;
+        record.document.context.assignments = (record.document.context.assignments || []).filter((assignment) => assignment.memberId !== request.params.memberId);
+      }
+      return null;
+    });
+    reply.code(204).send();
+  });
+
   app.get("/api/team/members", {
     preHandler: [requireAuth],
     schema: { tags: ["Team"], summary: "List mission team profiles", security: [{ sessionCookie: [] }] }
-  }, async () => {
+  }, async (request) => {
     const data = store.read();
-    return { members: data.members.map((member) => publicMember(data, member)) };
+    if (request.auth.user.accessRole === "owner_admin") return { members: data.members.map((member) => publicMember(data, member)) };
+    const visibleMemberIds = new Set([request.auth.user.memberId]);
+    for (const team of data.teams) {
+      if (!team.memberIds.includes(request.auth.user.memberId) && !canManageNamedTeam(data, request.auth.user, team)) continue;
+      team.memberIds.forEach((memberId) => visibleMemberIds.add(memberId));
+      if (canManageNamedTeam(data, request.auth.user, team)) team.joinRequests.forEach((memberId) => visibleMemberIds.add(memberId));
+    }
+    return { members: data.members.filter((member) => visibleMemberIds.has(member.id)).map((member) => publicMember(data, member)) };
   });
 
   app.post("/api/team/members", {
     preHandler: [requireAuth, requireCsrf],
     schema: { tags: ["Team"], summary: "Add or invite a team profile", security: [{ sessionCookie: [], csrfToken: [] }], body: memberBody }
   }, async (request, reply) => {
-    requireTeamRole(request.auth.user, ["owner_admin", "captain", "manager"], ["captain", "manager"]);
+    const requestedTeamId = normalizeText(request.body.teamId || "");
+    const currentData = store.read();
+    if (requestedTeamId) requireNamedTeamManager(currentData, request.auth.user, currentData.teams.find((team) => team.id === requestedTeamId));
+    else requireTeamRole(request.auth.user, ["owner_admin", "captain", "manager"], ["captain", "manager"]);
     const input = cleanMemberInput(request.body);
     if (!validateEmail(input.email)) throw httpError(400, "INVALID_EMAIL", "Enter a valid email address.");
     if (request.auth.user.accessRole === "manager" && input.missionRole !== "member") throw httpError(403, "FORBIDDEN", "Managers can invite members only.");
-    const invitationCode = randomBytes(9).toString("base64url").toUpperCase();
     const member = await store.update((data) => {
-      if (data.members.some((item) => item.email === input.email)) throw httpError(409, "MEMBER_EXISTS", "A team profile already uses this email.");
+      const existingMember = data.members.find((item) => item.email === input.email);
+      if (existingMember) {
+        if (!requestedTeamId) throw httpError(409, "MEMBER_EXISTS", "A team profile already uses this email.");
+        const team = data.teams.find((item) => item.id === requestedTeamId);
+        if (!team) throw httpError(404, "TEAM_NOT_FOUND", "Team was not found.");
+        team.memberIds = [...new Set([...team.memberIds, existingMember.id])];
+        team.updatedAt = new Date().toISOString();
+        return existingMember;
+      }
       const timestamp = new Date().toISOString();
       const next = {
         id: randomUUID(),
         accountId: null,
         ...input,
         accountStatus: "invited",
-        invitationCodeHash: hashToken(invitationCode),
-        invitationExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: timestamp,
         updatedAt: timestamp
       };
       data.members.push(next);
+      if (requestedTeamId) {
+        const team = data.teams.find((item) => item.id === requestedTeamId);
+        if (!team) throw httpError(404, "TEAM_NOT_FOUND", "Team was not found.");
+        team.memberIds = [...new Set([...team.memberIds, next.id])];
+        team.updatedAt = timestamp;
+      }
       return next;
     });
     reply.code(201);
-    return { member: publicMember(store.read(), member), invitationCode };
+    return { member: publicMember(store.read(), member) };
   });
 
   app.post("/api/team/members/:id/invitation", {
     preHandler: [requireAuth, requireCsrf],
     schema: {
       tags: ["Team"],
-      summary: "Create a one-time account invitation",
+      summary: "Mark a profile as awaiting account registration",
       security: [{ sessionCookie: [], csrfToken: [] }],
       params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(80, 1) } }
     }
   }, async (request) => {
     requireTeamRole(request.auth.user, ["owner_admin", "captain"], ["captain"]);
-    const invitationCode = randomBytes(9).toString("base64url").toUpperCase();
     const member = await store.update((data) => {
       const existing = data.members.find((item) => item.id === request.params.id);
       if (!existing) throw httpError(404, "MEMBER_NOT_FOUND", "Team member was not found.");
       if (existing.accountId) throw httpError(409, "ACCOUNT_EXISTS", "This profile already has an account.");
       existing.accountStatus = "invited";
-      existing.invitationCodeHash = hashToken(invitationCode);
-      existing.invitationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       existing.updatedAt = new Date().toISOString();
       return existing;
     });
-    return { member: publicMember(store.read(), member), invitationCode };
+    return { member: publicMember(store.read(), member) };
   });
 
   app.patch("/api/team/members/:id", {
@@ -628,7 +885,13 @@ export async function buildApp(options = {}) {
       const index = data.members.findIndex((item) => item.id === request.params.id);
       if (index < 0) throw httpError(404, "MEMBER_NOT_FOUND", "Team member was not found.");
       if (data.members[index].accountId) throw httpError(409, "MEMBER_HAS_ACCOUNT", "Deactivate the account before removing this profile.");
+      const memberId = data.members[index].id;
       data.members.splice(index, 1);
+      for (const team of data.teams) team.memberIds = team.memberIds.filter((id) => id !== memberId);
+      for (const record of Object.values(data.workspace.projects || {})) {
+        const assignments = record?.document?.context?.assignments;
+        if (Array.isArray(assignments)) record.document.context.assignments = assignments.filter((assignment) => assignment.memberId !== memberId);
+      }
       return null;
     });
     reply.code(204).send();
@@ -637,7 +900,18 @@ export async function buildApp(options = {}) {
   app.get("/api/artifacts", {
     preHandler: [requireAuth],
     schema: { tags: ["Artifacts"], summary: "List connected mission sources", security: [{ sessionCookie: [] }] }
-  }, async () => ({ artifacts: store.read().artifacts }));
+  }, async (request) => {
+    const data = store.read();
+    if (request.auth.user.accessRole === "owner_admin") return { artifacts: data.artifacts };
+    const teamIds = new Set(data.teams.filter((team) => team.memberIds.includes(request.auth.user.memberId)).map((team) => team.id));
+    const projectIds = new Set(Object.entries(data.workspace.projects || {}).filter(([, record]) => canAccessProject(data, request.auth.user, record)).map(([projectId]) => projectId));
+    return {
+      artifacts: data.artifacts.filter((artifact) => artifact.official
+        || artifact.createdBy === request.auth.user.id
+        || (artifact.scope === "team" && teamIds.has(artifact.ownerId))
+        || (artifact.scope === "project" && projectIds.has(artifact.ownerId)))
+    };
+  });
 
   app.post("/api/artifacts", {
     preHandler: [requireAuth, requireCsrf],
@@ -646,9 +920,21 @@ export async function buildApp(options = {}) {
     if (request.auth.user.accessRole === "advisor") throw httpError(403, "FORBIDDEN", "Advisors have read-only access to connected sources.");
     const input = cleanArtifactInput(request.body);
     const artifact = await store.update((data) => {
+      if (input.scope === "team") {
+        const team = data.teams.find((item) => item.id === input.ownerId);
+        requireNamedTeamManager(data, request.auth.user, team);
+      } else if (input.ownerId) {
+        const record = data.workspace.projects?.[input.ownerId];
+        if (record && !canAccessProject(data, request.auth.user, record)) throw httpError(403, "FORBIDDEN", "You cannot update this project.");
+      }
       const timestamp = new Date().toISOString();
       const next = { id: randomUUID(), ...input, official: false, createdBy: request.auth.user.id, connectedAt: timestamp, updatedAt: timestamp };
       data.artifacts.push(next);
+      if (next.scope === "team") {
+        const team = data.teams.find((item) => item.id === next.ownerId);
+        team.artifactIds = [...new Set([...team.artifactIds, next.id])];
+        team.updatedAt = timestamp;
+      }
       return next;
     });
     reply.code(201);
@@ -669,8 +955,9 @@ export async function buildApp(options = {}) {
       const existing = data.artifacts.find((item) => item.id === request.params.id);
       if (!existing) throw httpError(404, "ARTIFACT_NOT_FOUND", "Connected source was not found.");
       if (existing.official) requireRole(request.auth.user, ["owner_admin"]);
+      else if (existing.scope === "team") requireNamedTeamManager(data, request.auth.user, data.teams.find((team) => team.id === existing.ownerId));
       else if (existing.createdBy !== request.auth.user.id) requireRole(request.auth.user, ["owner_admin", "captain", "manager"]);
-      const merged = cleanArtifactInput({ ...existing, ...request.body });
+      const merged = cleanArtifactInput({ ...existing, ...request.body, scope: existing.scope, ownerId: existing.ownerId });
       Object.assign(existing, merged, { updatedAt: new Date().toISOString() });
       return existing;
     });
@@ -691,8 +978,16 @@ export async function buildApp(options = {}) {
       if (index < 0) throw httpError(404, "ARTIFACT_NOT_FOUND", "Connected source was not found.");
       const artifact = data.artifacts[index];
       if (artifact.official) throw httpError(409, "OFFICIAL_SOURCE", "Official mission references cannot be disconnected.");
-      if (artifact.createdBy !== request.auth.user.id) requireRole(request.auth.user, ["owner_admin", "captain", "manager"]);
+      if (artifact.scope === "team") requireNamedTeamManager(data, request.auth.user, data.teams.find((team) => team.id === artifact.ownerId));
+      else if (artifact.createdBy !== request.auth.user.id) requireRole(request.auth.user, ["owner_admin", "captain", "manager"]);
       data.artifacts.splice(index, 1);
+      for (const team of data.teams) team.artifactIds = team.artifactIds.filter((id) => id !== artifact.id);
+      for (const record of Object.values(data.workspace.projects || {})) {
+        const context = record?.document?.context;
+        if (!context) continue;
+        context.teamArtifactIds = (context.teamArtifactIds || []).filter((id) => id !== artifact.id);
+        context.projectArtifactIds = (context.projectArtifactIds || []).filter((id) => id !== artifact.id);
+      }
       return null;
     });
     reply.code(204).send();
@@ -713,6 +1008,94 @@ export async function buildApp(options = {}) {
       body: brainstormRequestSchema
     }
   }, async (request) => ai.analyze(request.body));
+
+  const projectParams = {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: { id: string(100, 1) }
+  };
+
+  app.get("/api/projects", {
+    preHandler: [requireAuth],
+    schema: { tags: ["System"], summary: "List projects associated with the account", security: [{ sessionCookie: [] }] }
+  }, async (request) => {
+    const data = store.read();
+    const projects = Object.values(data.workspace.projects || {})
+      .filter((record) => canAccessProject(data, request.auth.user, record))
+      .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)))
+      .map(projectSummary);
+    return { projects };
+  });
+
+  app.post("/api/projects", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: { tags: ["System"], summary: "Create a project", security: [{ sessionCookie: [], csrfToken: [] }], body: { type: "object", additionalProperties: true } }
+  }, async (request, reply) => {
+    if (!validProjectDocument(request.body)) throw httpError(400, "INVALID_PROJECT", "The project document is invalid or unsupported.");
+    const record = await store.update((data) => {
+      if (data.workspace.projects[request.body.id]) throw httpError(409, "PROJECT_EXISTS", "A project with this identifier already exists.");
+      const teamId = request.body.context?.teamId;
+      if (teamId) {
+        const team = data.teams.find((item) => item.id === teamId);
+        if (!team || (request.auth.user.accessRole !== "owner_admin" && !team.memberIds.includes(request.auth.user.memberId))) throw httpError(403, "FORBIDDEN", "Join the selected team before creating this project.");
+      }
+      const timestamp = new Date().toISOString();
+      const next = { document: request.body, revision: 1, createdAt: timestamp, createdBy: request.auth.user.id, updatedAt: timestamp, updatedBy: request.auth.user.id };
+      data.workspace.projects[request.body.id] = next;
+      data.workspace.project = next;
+      return next;
+    });
+    reply.code(201);
+    return { project: record.document, revision: record.revision, updatedAt: record.updatedAt };
+  });
+
+  app.get("/api/projects/:id", {
+    preHandler: [requireAuth],
+    schema: { tags: ["System"], summary: "Open an associated project", security: [{ sessionCookie: [] }], params: projectParams }
+  }, async (request) => {
+    const data = store.read();
+    const record = data.workspace.projects?.[request.params.id];
+    if (!record) throw httpError(404, "PROJECT_NOT_FOUND", "Project was not found.");
+    if (!canAccessProject(data, request.auth.user, record)) throw httpError(403, "FORBIDDEN", "You cannot open this project.");
+    return { project: record.document, revision: record.revision, updatedAt: record.updatedAt };
+  });
+
+  app.put("/api/projects/:id", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: { tags: ["System"], summary: "Persist an associated project", security: [{ sessionCookie: [], csrfToken: [] }], params: projectParams, body: { type: "object", additionalProperties: true } }
+  }, async (request) => {
+    if (request.auth.user.accessRole === "advisor") throw httpError(403, "FORBIDDEN", "Advisors have read-only access to the project workspace.");
+    if (request.body.id !== request.params.id || !validProjectDocument(request.body)) throw httpError(400, "INVALID_PROJECT", "The project document is invalid or unsupported.");
+    return store.update((data) => {
+      const previous = data.workspace.projects?.[request.params.id];
+      if (!previous) throw httpError(404, "PROJECT_NOT_FOUND", "Project was not found.");
+      if (!canAccessProject(data, request.auth.user, previous)) throw httpError(403, "FORBIDDEN", "You cannot update this project.");
+      const nextTeamId = request.body.context?.teamId;
+      if (nextTeamId) {
+        const nextTeam = data.teams.find((item) => item.id === nextTeamId);
+        if (!nextTeam || (request.auth.user.accessRole !== "owner_admin" && !nextTeam.memberIds.includes(request.auth.user.memberId))) {
+          throw httpError(403, "FORBIDDEN", "Join the selected team before connecting it to this project.");
+        }
+      }
+      if (!isDeepStrictEqual(previous.document.context, request.body.context)) {
+        const team = data.teams.find((item) => item.id === previous.document.context?.teamId);
+        const projectLead = previous.document.context?.assignments?.some((item) => item.memberId === request.auth.user.memberId && ["captain", "manager"].includes(item.roleId));
+        const projectCreator = previous.createdBy === request.auth.user.id;
+        if (!projectCreator && !projectLead && !canManageNamedTeam(data, request.auth.user, team)) throw httpError(403, "FORBIDDEN", "Only project leadership can change its team and memory.");
+      }
+      const record = {
+        ...previous,
+        document: request.body,
+        revision: (previous.revision ?? 0) + 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: request.auth.user.id
+      };
+      data.workspace.projects[request.params.id] = record;
+      data.workspace.project = record;
+      return { project: record.document, revision: record.revision, updatedAt: record.updatedAt };
+    });
+  });
 
   app.get("/api/workspace/project", {
     preHandler: [requireAuth],
@@ -740,12 +1123,15 @@ export async function buildApp(options = {}) {
     return store.update((data) => {
       const previous = data.workspace.project;
       const record = {
+        createdAt: previous?.createdAt ?? new Date().toISOString(),
+        createdBy: previous?.createdBy ?? request.auth.user.id,
         document: request.body,
         revision: (previous?.revision ?? 0) + 1,
         updatedAt: new Date().toISOString(),
         updatedBy: request.auth.user.id
       };
       data.workspace.project = record;
+      data.workspace.projects[request.body.id] = record;
       return { project: record.document, revision: record.revision, updatedAt: record.updatedAt };
     });
   });

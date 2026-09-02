@@ -1,6 +1,9 @@
+import type { Language } from "./types";
+
 export type AccessRole = "owner_admin" | "captain" | "manager" | "member" | "advisor";
 export type MemberStatus = "demo" | "invited" | "active";
 export type ArtifactKind = "official" | "document" | "repository" | "dataset" | "link";
+export type ArtifactScope = "team" | "project";
 
 export type SessionUser = {
   id: string;
@@ -11,6 +14,8 @@ export type SessionUser = {
   accessRole: AccessRole;
   institution: string;
   primaryArea?: string;
+  avatarUrl?: string;
+  profileComplete?: boolean;
 };
 
 export type TeamMember = {
@@ -29,8 +34,23 @@ export type TeamMember = {
   notes: string;
   accountStatus: MemberStatus;
   accessRole: AccessRole | null;
+  avatarUrl?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type TeamRecord = {
+  id: string;
+  name: string;
+  description: string;
+  memberIds: string[];
+  artifactIds: string[];
+  joinRequests: string[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  membership?: "member" | "requested" | "available";
+  canManage?: boolean;
 };
 
 export type ConnectedArtifact = {
@@ -42,8 +62,19 @@ export type ConnectedArtifact = {
   tags: string[];
   official: boolean;
   createdBy: string | null;
+  scope?: ArtifactScope;
+  ownerId?: string | null;
   connectedAt: string;
   updatedAt: string;
+};
+
+export type ProjectSummary = {
+  id: string;
+  name: string;
+  programId: string | null;
+  teamId: string | null;
+  updatedAt: string;
+  memberCount: number;
 };
 
 export function memberInitials(name: string): string {
@@ -60,4 +91,3 @@ export function accessRoleLabel(role: AccessRole, language: Language): string {
   };
   return labels[role][language];
 }
-import type { Language } from "./types";

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { ArrowRight, FolderOpen, Plus, UsersRound } from "lucide-react";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
+import { referenceProgram } from "../lib/programs";
+import type { ProjectSummary } from "../lib/team";
 import type { Language } from "../lib/types";
 import "../home-overrides.css";
 
@@ -8,66 +10,125 @@ type Props = {
   language: Language;
   t: (path: string) => string;
   onLanguageChange: (language: Language) => void;
-  onOpenBrainstorm: () => void;
+  projects?: ProjectSummary[];
+  loadingProjects?: boolean;
+  onCreateProject?: () => void;
+  onOpenBrainstorm?: () => void;
+  onOpenProject?: (projectId: string) => void;
+  onOpenTeams?: () => void;
 };
 
-type IconName = "create" | "folder" | "import" | "docs";
+export function HomePage({
+  language,
+  t,
+  onLanguageChange,
+  projects = [],
+  loadingProjects = false,
+  onCreateProject,
+  onOpenBrainstorm,
+  onOpenProject,
+  onOpenTeams
+}: Props) {
+  const c = language === "pt" ? {
+    eyebrow: "ESPAÇO DE TRABALHO",
+    title: "Seus projetos",
+    subtitle: "Crie uma equipe, inicie um projeto ou retome um trabalho em andamento.",
+    teams: "Equipes",
+    teamsDescription: "Crie uma equipe, aceite convites e organize as pessoas com quem você trabalha.",
+    create: "Novo projeto",
+    createDescription: "Comece pela memória do projeto e conecte programa, equipe e referências.",
+    open: "Abrir projeto",
+    openDescription: "Continue um projeto associado à sua conta.",
+    recent: "PROJETOS ASSOCIADOS",
+    empty: "Nenhum projeto criado ainda.",
+    emptyHint: "Seu primeiro projeto aparecerá aqui assim que você o criar.",
+    loading: "Carregando projetos",
+    untitled: "Projeto sem nome",
+    noProgram: "Programa ainda não selecionado",
+    member: "membro",
+    members: "membros",
+    updated: "Atualizado"
+  } : {
+    eyebrow: "WORKSPACE",
+    title: "Your projects",
+    subtitle: "Create a team, start a project, or resume work already in progress.",
+    teams: "Teams",
+    teamsDescription: "Create a team, accept invitations, and organize the people you work with.",
+    create: "New project",
+    createDescription: "Begin with project memory and connect the program, team, and references.",
+    open: "Open project",
+    openDescription: "Continue a project associated with your account.",
+    recent: "ASSOCIATED PROJECTS",
+    empty: "No projects have been created yet.",
+    emptyHint: "Your first project will appear here as soon as you create it.",
+    loading: "Loading projects",
+    untitled: "Untitled project",
+    noProgram: "Program not selected yet",
+    member: "member",
+    members: "members",
+    updated: "Updated"
+  };
 
-function HomeIcon({ name }: { name: IconName }) {
-  if (name === "create") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M7 12h10" /></svg>;
-  }
-
-  if (name === "folder") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5h6l2-2h3.5l2 2H21v11H3z" /><path d="M3 9.5h18" /></svg>;
-  }
-
-  if (name === "import") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m8 10 4 4 4-4" /><path d="M5 16v4h14v-4" /></svg>;
-  }
-
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5h6.5A2.5 2.5 0 0 1 13 7v13a3 3 0 0 0-3-3H4z" /><path d="M20 4.5h-6.5A2.5 2.5 0 0 0 11 7v13a3 3 0 0 1 3-3h6z" /></svg>;
-}
-
-export function HomePage({ language, t, onLanguageChange, onOpenBrainstorm }: Props) {
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  function showDevelopment(label: string) {
-    setToast(label);
-  }
+  const createProject = onCreateProject ?? onOpenBrainstorm ?? (() => undefined);
+  const scrollToProjects = () => document.querySelector(".home-projects")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className="home-shell">
+    <div className="home-shell home-dashboard-shell">
       <main className="home-main">
-        <header className="home-topbar">
+        <header className="home-topbar dashboard-topbar">
+          <strong className="dashboard-wordmark">NORTE</strong>
           <div className="top-actions">
             <LanguageToggle language={language} onChange={onLanguageChange} />
             <UserBadge connectedLabel={t("common.connected")} />
           </div>
         </header>
 
-        <section className="home-hero home-hero-no-artwork">
-          <span className="tech-corner tl" /><span className="tech-corner tr" /><span className="tech-corner bl" /><span className="tech-corner br" />
-          <div className="home-title">
-            <h1>NORTE</h1>
-          </div>
+        <div className="home-dashboard">
+          <header className="dashboard-heading">
+            <span>{c.eyebrow}</span>
+            <h1>{c.title}</h1>
+            <p>{c.subtitle}</p>
+          </header>
 
-          <div className="home-action-grid">
-            <button className="home-action-card" onClick={onOpenBrainstorm}><span className="home-card-icon"><HomeIcon name="create" /></span><strong>{t("home.createProject")}</strong><small>{t("home.createProjectDescription")}</small></button>
-            <button className="home-action-card disabled" onClick={() => showDevelopment(t("home.openProject"))}><span className="home-card-icon"><HomeIcon name="folder" /></span><strong>{t("home.openProject")}</strong><small>{t("home.openProjectDescription")}</small><em>{t("common.inDevelopment")}</em></button>
-            <button className="home-action-card disabled" onClick={() => showDevelopment(t("home.importRequirements"))}><span className="home-card-icon"><HomeIcon name="import" /></span><strong>{t("home.importRequirements")}</strong><small>{t("home.importRequirementsDescription")}</small><em>{t("common.inDevelopment")}</em></button>
-            <button className="home-action-card disabled" onClick={() => showDevelopment(t("home.documentation"))}><span className="home-card-icon"><HomeIcon name="docs" /></span><strong>{t("home.documentation")}</strong><small>{t("home.documentationDescription")}</small><em>{t("common.inDevelopment")}</em></button>
-          </div>
-        </section>
+          <section className="dashboard-actions" aria-label={language === "pt" ? "Ações principais" : "Primary actions"}>
+            <button type="button" onClick={onOpenTeams}>
+              <span className="dashboard-action-icon"><UsersRound aria-hidden="true" /></span>
+              <span><strong>{c.teams}</strong><small>{c.teamsDescription}</small></span>
+              <ArrowRight aria-hidden="true" />
+            </button>
+            <button type="button" onClick={createProject}>
+              <span className="dashboard-action-icon"><Plus aria-hidden="true" /></span>
+              <span><strong>{c.create}</strong><small>{c.createDescription}</small></span>
+              <ArrowRight aria-hidden="true" />
+            </button>
+            <button type="button" onClick={scrollToProjects} disabled={projects.length === 0}>
+              <span className="dashboard-action-icon"><FolderOpen aria-hidden="true" /></span>
+              <span><strong>{c.open}</strong><small>{c.openDescription}</small></span>
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </section>
+
+          <section className="home-projects">
+            <div className="home-projects-heading"><span>{c.recent}</span><strong>{projects.length}</strong></div>
+            {loadingProjects ? <div className="home-project-empty">{c.loading}</div> : projects.length === 0 ? (
+              <div className="home-project-empty"><FolderOpen aria-hidden="true" /><strong>{c.empty}</strong><span>{c.emptyHint}</span><button type="button" onClick={createProject}><Plus aria-hidden="true" />{c.create}</button></div>
+            ) : (
+              <div className="home-project-list">
+                {projects.map((project) => {
+                  const program = referenceProgram(project.programId);
+                  const date = new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(project.updatedAt));
+                  return <button type="button" key={project.id} onClick={() => onOpenProject?.(project.id)}>
+                    <span className="home-project-symbol"><FolderOpen aria-hidden="true" /></span>
+                    <span className="home-project-copy"><strong>{project.name || c.untitled}</strong><small>{program?.name[language] ?? c.noProgram}</small></span>
+                    <span className="home-project-meta"><small>{project.memberCount} {project.memberCount === 1 ? c.member : c.members}</small><small>{c.updated} {date}</small></span>
+                    <ArrowRight aria-hidden="true" />
+                  </button>;
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
-
-      {toast && <div className="toast"><strong>{toast}</strong><span>{t("home.developmentMessage")}</span></div>}
     </div>
   );
 }

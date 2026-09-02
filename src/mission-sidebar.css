@@ -158,10 +158,30 @@
   font-size: 14px;
 }
 
-.mission-sidebar.collapsed .mission-sidebar-home,
-.mission-sidebar.collapsed .mission-sidebar-divider,
 .mission-sidebar.collapsed .mission-sidebar-user {
   display: none;
+}
+
+.mission-sidebar.collapsed .mission-sidebar-home {
+  display: flex;
+  width: 46px;
+  min-height: 44px;
+  justify-content: center;
+  margin: 8px auto 4px;
+  padding: 0;
+}
+
+.mission-sidebar.collapsed .mission-sidebar-team {
+  margin-top: 0;
+}
+
+.mission-sidebar.collapsed .mission-sidebar-home-label {
+  display: none;
+}
+
+.mission-sidebar.collapsed .mission-sidebar-divider {
+  display: block;
+  margin: 5px 12px 7px;
 }
 
 .mission-sidebar-divider {

@@ -1,16 +1,50 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, ShieldCheck } from "lucide-react";
-import { useAuth } from "../lib/auth";
+import { Camera, Check, LoaderCircle, LogOut, Settings2, ShieldCheck, UsersRound, X } from "lucide-react";
+import { ApiError, useAuth } from "../lib/auth";
 import { accessRoleLabel } from "../lib/team";
+import type { TeamMember, TeamRecord } from "../lib/team";
 
 type Props = {
   connectedLabel: string;
   compact?: boolean;
 };
 
+function avatarData(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) {
+      reject(new Error("INVALID_IMAGE"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("INVALID_IMAGE"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("INVALID_IMAGE"));
+      image.onload = () => {
+        const size = Math.min(image.naturalWidth, image.naturalHeight);
+        const canvas = document.createElement("canvas");
+        canvas.width = 320;
+        canvas.height = 320;
+        const context = canvas.getContext("2d");
+        if (!context) return reject(new Error("INVALID_IMAGE"));
+        context.drawImage(image, (image.naturalWidth - size) / 2, (image.naturalHeight - size) / 2, size, size, 0, 0, 320, 320);
+        resolve(canvas.toDataURL("image/jpeg", .82));
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function UserBadge({ connectedLabel, compact = false }: Props) {
-  const { user, logout, isDemo } = useAuth();
+  const auth = useAuth();
+  const { user, logout, isDemo } = auth;
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState<TeamMember | null>(null);
+  const [teams, setTeams] = useState<TeamRecord[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const language = document.documentElement.lang.startsWith("en") ? "en" : "pt";
 
@@ -22,21 +56,103 @@ export function UserBadge({ connectedLabel, compact = false }: Props) {
     return () => window.removeEventListener("pointerdown", close);
   }, []);
 
+  async function openProfile() {
+    setOpen(false);
+    setProfileOpen(true);
+    setError("");
+    try {
+      const [profileResponse, teamResponse] = await Promise.all([
+        auth.api<{ profile: TeamMember }>("/profile"),
+        auth.api<{ teams: TeamRecord[] }>("/teams")
+      ]);
+      setProfile(profileResponse.profile);
+      setTeams(teamResponse.teams.filter((team) => team.membership === "member" || team.memberIds.includes(user?.memberId || "")));
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : (language === "pt" ? "Não foi possível abrir o perfil." : "The profile could not be opened."));
+    }
+  }
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await auth.api<{ profile: TeamMember }>("/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          displayName: profile.displayName,
+          institution: profile.institution,
+          course: profile.course,
+          academicStage: profile.academicStage,
+          availabilityHours: profile.availabilityHours,
+          avatarUrl: profile.avatarUrl || ""
+        })
+      });
+      setProfile(response.profile);
+      await auth.refresh();
+      setProfileOpen(false);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : (language === "pt" ? "Não foi possível salvar o perfil." : "The profile could not be saved."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selectAvatar(file: File | undefined) {
+    if (!file || !profile) return;
+    try {
+      const avatarUrl = await avatarData(file);
+      setProfile({ ...profile, avatarUrl });
+    } catch {
+      setError(language === "pt" ? "Escolha uma imagem JPG, PNG ou WebP de até 8 MB." : "Choose a JPG, PNG, or WebP image up to 8 MB.");
+    }
+  }
+
   if (!user) return null;
 
+  const avatar = profile?.avatarUrl || user.avatarUrl;
+
   return (
-    <div className={compact ? "user-badge compact account-badge" : "user-badge account-badge"} ref={rootRef}>
-      <button className="account-badge-trigger" type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={user.name}>
-        <div className="avatar">{user.initials}</div>
-        {!compact && <div className="user-copy"><div className="user-name">{user.name}</div><div className="user-state"><span className="online-dot" />{connectedLabel}</div></div>}
-      </button>
-      {open && (
-        <div className="account-menu">
-          <div className="account-menu-head"><ShieldCheck aria-hidden="true" /><div><strong>{user.name}</strong><span>{user.email}</span></div></div>
-          <div className="account-menu-role">{isDemo ? (language === "pt" ? "Demonstração local" : "Local demo") : accessRoleLabel(user.accessRole, language)}</div>
-          {!isDemo && <button type="button" onClick={() => void logout()}><LogOut aria-hidden="true" />{language === "pt" ? "Sair" : "Sign out"}</button>}
-        </div>
-      )}
-    </div>
+    <>
+      <div className={compact ? "user-badge compact account-badge" : "user-badge account-badge"} ref={rootRef}>
+        <button className="account-badge-trigger" type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={user.name}>
+          <div className={avatar ? "avatar has-photo" : "avatar"}>{avatar ? <img src={avatar} alt="" /> : user.initials}</div>
+          {!compact && <div className="user-copy"><div className="user-name">{user.name}</div><div className="user-state"><span className="online-dot" />{connectedLabel}</div></div>}
+        </button>
+        {open && (
+          <div className="account-menu">
+            <div className="account-menu-head"><ShieldCheck aria-hidden="true" /><div><strong>{user.name}</strong><span>{user.email}</span></div></div>
+            <div className="account-menu-role">{isDemo ? (language === "pt" ? "Administradora · modo demonstração" : "Administrator · demo mode") : accessRoleLabel(user.accessRole, language)}</div>
+            <button type="button" onClick={() => void openProfile()}><Settings2 aria-hidden="true" />{language === "pt" ? "Ver e editar perfil" : "View and edit profile"}</button>
+            <button type="button" onClick={() => { setOpen(false); window.location.hash = "#/teams"; }}><UsersRound aria-hidden="true" />{language === "pt" ? "Minhas equipes" : "My teams"}</button>
+            {!isDemo && <button type="button" onClick={() => void logout()}><LogOut aria-hidden="true" />{language === "pt" ? "Sair" : "Sign out"}</button>}
+          </div>
+        )}
+      </div>
+
+      {profileOpen && <div className="profile-dialog-backdrop" role="presentation" onPointerDown={() => setProfileOpen(false)}>
+        <section className="profile-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
+          <header><div><span>{language === "pt" ? "CONTA" : "ACCOUNT"}</span><h2 id="profile-dialog-title">{language === "pt" ? "Seu perfil" : "Your profile"}</h2></div><button type="button" onClick={() => setProfileOpen(false)} aria-label={language === "pt" ? "Fechar" : "Close"}><X aria-hidden="true" /></button></header>
+          {!profile ? <div className="profile-loading">{error || <LoaderCircle aria-hidden="true" />}</div> : <form onSubmit={(event) => void saveProfile(event)}>
+            <div className="profile-avatar-editor">
+              <div>{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" /> : user.initials}</div>
+              <label><Camera aria-hidden="true" /><span>{language === "pt" ? "Escolher foto" : "Choose photo"}</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void selectAvatar(event.target.files?.[0])} /></label>
+            </div>
+            <div className="profile-fields">
+              <label><span>{language === "pt" ? "Nome" : "Name"}</span><input value={profile.displayName} required maxLength={100} onChange={(event) => setProfile({ ...profile, displayName: event.target.value })} /></label>
+              <label><span>E-mail</span><input value={profile.email} readOnly /></label>
+              <label><span>{language === "pt" ? "Universidade" : "University"}</span><input value={profile.institution} maxLength={160} onChange={(event) => setProfile({ ...profile, institution: event.target.value })} /></label>
+              <label><span>{language === "pt" ? "Curso" : "Course"}</span><input value={profile.course} maxLength={120} onChange={(event) => setProfile({ ...profile, course: event.target.value })} /></label>
+              <label><span>{language === "pt" ? "Semestre" : "Semester"}</span><input value={profile.academicStage} maxLength={80} onChange={(event) => setProfile({ ...profile, academicStage: event.target.value })} /></label>
+              <label><span>{language === "pt" ? "Horas disponíveis por semana" : "Available hours per week"}</span><input type="number" min={0} max={80} value={profile.availabilityHours} onChange={(event) => setProfile({ ...profile, availabilityHours: Number(event.target.value) })} /></label>
+            </div>
+            <section className="profile-teams"><span>{language === "pt" ? "EQUIPES ASSOCIADAS" : "ASSOCIATED TEAMS"}</span><div>{teams.map((team) => <button type="button" key={team.id} onClick={() => { setProfileOpen(false); window.location.hash = "#/teams"; }}><UsersRound aria-hidden="true" /><strong>{team.name}</strong></button>)}{teams.length === 0 && <p>{language === "pt" ? "Você ainda não participa de uma equipe." : "You are not part of a team yet."}</p>}</div></section>
+            {error && <p className="profile-error" role="alert">{error}</p>}
+            <footer><button type="button" onClick={() => setProfileOpen(false)}>{language === "pt" ? "Preencher depois" : "Complete later"}</button><button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="profile-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{language === "pt" ? "Salvar perfil" : "Save profile"}</button></footer>
+          </form>}
+        </section>
+      </div>}
+    </>
   );
 }

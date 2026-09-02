@@ -86,7 +86,7 @@ test("first registration creates an owner session and protects mutations", async
   assert.match(persisted, /\$argon2id\$/);
 });
 
-test("later registrations receive member access and invalid credentials are rejected", async (t) => {
+test("open registrations receive member access and email invitations link profiles", async (t) => {
   const storeFile = join(tmpdir(), `mission-dev-${randomUUID()}.json`);
   const app = await buildApp({ storeFile, logger: false });
   t.after(async () => {
@@ -113,14 +113,19 @@ test("later registrations receive member access and invalid credentials are reje
     }
   });
   assert.equal(invitation.statusCode, 201);
-  assert.ok(invitation.json().invitationCode);
+  assert.equal("invitationCode" in invitation.json(), false);
   assert.equal("invitationCodeHash" in invitation.json().member, false);
 
   const withoutInvitation = await app.inject({ method: "POST", url: "/api/auth/register", payload: { ...base, name: "Sem Convite", email: "sem-convite@example.edu.br" } });
-  assert.equal(withoutInvitation.statusCode, 403);
-  assert.equal(withoutInvitation.json().error, "INVITATION_REQUIRED");
+  assert.equal(withoutInvitation.statusCode, 201);
+  assert.equal(withoutInvitation.json().user.accessRole, "member");
+  const outsiderCookie = cookieFrom(withoutInvitation);
+  const outsiderMembers = await app.inject({ method: "GET", url: "/api/team/members", headers: { cookie: outsiderCookie } });
+  assert.deepEqual(outsiderMembers.json().members.map((member) => member.email), ["sem-convite@example.edu.br"]);
+  const outsiderArtifacts = await app.inject({ method: "GET", url: "/api/artifacts", headers: { cookie: outsiderCookie } });
+  assert.equal(outsiderArtifacts.json().artifacts.length, 0);
 
-  const second = await app.inject({ method: "POST", url: "/api/auth/register", payload: { ...base, name: "Segunda Pessoa", email: "member@example.edu.br", inviteCode: invitation.json().invitationCode } });
+  const second = await app.inject({ method: "POST", url: "/api/auth/register", payload: { ...base, name: "Segunda Pessoa", email: "member@example.edu.br" } });
   assert.equal(second.statusCode, 201);
   assert.equal(second.json().user.accessRole, "member");
 
@@ -245,4 +250,120 @@ test("sessions and shared workspaces survive a server restart", async (t) => {
   assert.equal(restoredProject.json().project.id, project.id);
   const restoredLab = await app.inject({ method: "GET", url: "/api/workspace/labs/mission-persistence", headers: { cookie } });
   assert.equal(restoredLab.json().board.schemaVersion, 1);
+});
+
+test("minimal profiles, teams, artifacts, and multiple projects share one workspace", async (t) => {
+  const storeFile = join(tmpdir(), `norte-workspace-${randomUUID()}.json`);
+  const app = await buildApp({ storeFile, logger: false });
+  t.after(async () => {
+    await app.close();
+    await rm(storeFile, { force: true });
+  });
+
+  const registration = await app.inject({
+    method: "POST",
+    url: "/api/auth/register",
+    payload: {
+      name: "Emily Teste",
+      email: "emily.teste@example.edu.br",
+      password: "uma frase segura para testar"
+    }
+  });
+  assert.equal(registration.statusCode, 201);
+  assert.equal(registration.json().user.profileComplete, false);
+  const headers = {
+    cookie: cookieFrom(registration),
+    "x-csrf-token": registration.json().csrfToken
+  };
+
+  const profile = await app.inject({ method: "GET", url: "/api/profile", headers });
+  assert.equal(profile.statusCode, 200);
+  assert.equal(profile.json().profile.institution, "");
+
+  const updatedProfile = await app.inject({
+    method: "PATCH",
+    url: "/api/profile",
+    headers,
+    payload: {
+      institution: "Universidade de Exemplo",
+      course: "Engenharia Aeroespacial",
+      academicStage: "4º semestre",
+      availabilityHours: 12
+    }
+  });
+  assert.equal(updatedProfile.statusCode, 200);
+  assert.equal(updatedProfile.json().user.profileComplete, true);
+
+  const teamResponse = await app.inject({
+    method: "POST",
+    url: "/api/teams",
+    headers,
+    payload: { name: "Equipe Horizonte", description: "Equipe universitária de validação." }
+  });
+  assert.equal(teamResponse.statusCode, 201);
+  const teamId = teamResponse.json().team.id;
+
+  const artifactResponse = await app.inject({
+    method: "POST",
+    url: "/api/artifacts",
+    headers,
+    payload: {
+      kind: "document",
+      label: "Relatório anterior",
+      url: "https://example.edu.br/relatorio.pdf",
+      description: "Memória permanente da equipe.",
+      scope: "team",
+      ownerId: teamId
+    }
+  });
+  assert.equal(artifactResponse.statusCode, 201);
+  const artifactId = artifactResponse.json().artifact.id;
+
+  const invitedMember = await app.inject({
+    method: "POST",
+    url: "/api/team/members",
+    headers,
+    payload: { teamId, displayName: "Pessoa Convidada", email: "convidada@example.edu.br" }
+  });
+  assert.equal(invitedMember.statusCode, 201);
+  const invitedMemberId = invitedMember.json().member.id;
+  const detachedMember = await app.inject({
+    method: "DELETE",
+    url: `/api/teams/${teamId}/members/${invitedMemberId}`,
+    headers
+  });
+  assert.equal(detachedMember.statusCode, 204);
+  const profilesAfterDetach = await app.inject({ method: "GET", url: "/api/team/members", headers });
+  assert.equal(profilesAfterDetach.json().members.some((member) => member.id === invitedMemberId), true);
+
+  const project = {
+    schemaVersion: 2,
+    id: "workspace-project",
+    name: "Projeto Horizonte",
+    context: {
+      configured: true,
+      programId: "obsat",
+      modalityId: "practical",
+      categoryId: "n3",
+      teamId,
+      teamName: "Equipe Horizonte",
+      teamArtifactIds: [artifactId],
+      projectArtifactIds: [],
+      roles: [{ id: "captain", name: "Capitão" }],
+      sectors: [],
+      assignments: [{ memberId: registration.json().user.memberId, roleId: "captain", sectorId: "" }]
+    },
+    board: { nodes: [], links: [] }
+  };
+  const createdProject = await app.inject({ method: "POST", url: "/api/projects", headers, payload: project });
+  assert.equal(createdProject.statusCode, 201);
+
+  const projects = await app.inject({ method: "GET", url: "/api/projects", headers });
+  assert.equal(projects.statusCode, 200);
+  assert.equal(projects.json().projects.some((item) => item.id === project.id && item.memberCount === 1), true);
+
+  const teams = await app.inject({ method: "GET", url: "/api/teams", headers });
+  const createdTeam = teams.json().teams.find((item) => item.id === teamId);
+  assert.equal(createdTeam.membership, "member");
+  assert.equal(createdTeam.artifactIds.includes(artifactId), true);
 });

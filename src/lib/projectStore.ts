@@ -53,7 +53,10 @@ export type ProjectContext = {
   programId: string | null;
   modalityId: string | null;
   categoryId: string | null;
+  teamId: string | null;
   teamName: string;
+  teamArtifactIds: string[];
+  projectArtifactIds: string[];
   roles: ProjectStructureItem[];
   sectors: ProjectStructureItem[];
   assignments: ProjectMemberAssignment[];
@@ -126,7 +129,10 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
       programId: null,
       modalityId: null,
       categoryId: null,
+      teamId: null,
       teamName: "",
+      teamArtifactIds: [],
+      projectArtifactIds: [],
       roles: DEFAULT_ROLES.map((role) => ({ ...role, name: language === "en" ? ({ captain: "Captain", manager: "Manager", member: "Member", advisor: "Advisor" }[role.id] ?? role.name) : role.name })),
       sectors: [],
       assignments: []
@@ -165,6 +171,8 @@ export function normalizeProject(project: MissionProject, language: Language = "
       ...context,
       roles: Array.isArray(context.roles) && context.roles.length > 0 ? context.roles : defaults.context.roles,
       sectors: Array.isArray(context.sectors) ? context.sectors : [],
+      teamArtifactIds: Array.isArray(context.teamArtifactIds) ? context.teamArtifactIds : [],
+      projectArtifactIds: Array.isArray(context.projectArtifactIds) ? context.projectArtifactIds : [],
       assignments: Array.isArray(context.assignments) ? context.assignments : []
     }
   };

@@ -15,7 +15,7 @@ npm run dev
 - Site: `http://127.0.0.1:5173/norte/`
 - Swagger: `http://127.0.0.1:8787/docs`
 
-A primeira conta criada vira proprietária/admin. As próximas contas usam o código gerado em **Adicionar pessoa**.
+A primeira conta criada vira proprietária/admin. As próximas contas podem ser criadas diretamente; quando um e-mail já foi adicionado a uma equipe, o novo perfil é associado a ela automaticamente.
 
 ## Publicações
 

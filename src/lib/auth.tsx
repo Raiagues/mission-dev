@@ -9,11 +9,6 @@ export type RegisterAccountInput = {
   name: string;
   email: string;
   password: string;
-  institution: string;
-  course: string;
-  academicStage: string;
-  availabilityHours: number;
-  inviteCode?: string;
 };
 
 type AuthStatus = "loading" | "anonymous" | "authenticated" | "offline";
@@ -80,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (STATIC_DEMO) {
       setHasOwner(true);
-      setUser(DEMO_USER);
+      setUser({ ...DEMO_USER });
       setStatus("authenticated");
       return;
     }
@@ -109,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     if (STATIC_DEMO) {
-      setUser(DEMO_USER);
+      setUser({ ...DEMO_USER });
       setHasOwner(true);
       setStatus("authenticated");
       return;
@@ -126,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(async (input: RegisterAccountInput) => {
     if (STATIC_DEMO) {
-      setUser(DEMO_USER);
+      setUser({ ...DEMO_USER });
       setHasOwner(true);
       setStatus("authenticated");
       return;

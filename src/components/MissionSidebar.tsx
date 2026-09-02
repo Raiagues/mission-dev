@@ -1,6 +1,6 @@
 import { Brand } from "./Brand";
 import { UserBadge } from "./UserBadge";
-import { UsersRound } from "lucide-react";
+import { Home, UsersRound } from "lucide-react";
 import type { Language } from "../lib/types";
 
 type Props = {
@@ -55,7 +55,7 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
         </div>
 
         <button className={homeActive ? "mission-sidebar-home active" : "mission-sidebar-home"} type="button" onClick={onHome} title={!expanded ? homeLabel : undefined}>
-          <span className="mission-sidebar-home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10.5V20h13v-9.5" /></svg></span>
+          <span className="mission-sidebar-home-icon"><Home aria-hidden="true" /></span>
           <span className="mission-sidebar-home-label">{homeLabel}</span>
         </button>
 

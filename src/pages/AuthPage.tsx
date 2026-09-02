@@ -22,22 +22,16 @@ export function AuthPage() {
 
   const c = language === "pt" ? {
     brandLine: "ENGENHARIA DE MISSÃO COLABORATIVA",
-    loginTitle: "Entrar na equipe",
-    registerTitle: auth.hasOwner ? "Criar conta de membro" : "Criar conta administradora",
-    firstAccount: "A primeira conta será proprietária desta equipe.",
+    loginTitle: "Entrar no Norte",
+    registerTitle: "Criar sua conta",
+    firstAccount: "A primeira conta deste ambiente recebe a administração inicial.",
     name: "Nome completo",
     email: "E-mail",
     password: "Senha",
     passwordHint: "Use uma frase com pelo menos 15 caracteres.",
-    institution: "Universidade",
-    course: "Curso",
-    stage: "Semestre",
-    availability: "Horas por semana",
-    inviteCode: "Código de convite",
-    inviteHint: "Use o código enviado pela liderança da equipe.",
     enter: "Entrar",
     create: "Criar conta",
-    noAccount: "Criar outra conta",
+    noAccount: "Criar conta",
     hasAccount: "Já tenho conta",
     offlineTitle: "Serviço temporariamente indisponível",
     offlineText: "Tente novamente em alguns instantes.",
@@ -45,22 +39,16 @@ export function AuthPage() {
     loading: "Abrindo sessão segura"
   } : {
     brandLine: "COLLABORATIVE MISSION ENGINEERING",
-    loginTitle: "Join the team",
-    registerTitle: auth.hasOwner ? "Create member account" : "Create administrator account",
-    firstAccount: "The first account will own this team.",
+    loginTitle: "Sign in to Norte",
+    registerTitle: "Create your account",
+    firstAccount: "The first account in this environment receives initial administration.",
     name: "Full name",
     email: "Email",
     password: "Password",
     passwordHint: "Use a passphrase with at least 15 characters.",
-    institution: "University",
-    course: "Degree or course",
-    stage: "Semester",
-    availability: "Hours per week",
-    inviteCode: "Invitation code",
-    inviteHint: "Use the code shared by the team leadership.",
     enter: "Sign in",
     create: "Create account",
-    noAccount: "Create another account",
+    noAccount: "Create account",
     hasAccount: "I already have an account",
     offlineTitle: "Service temporarily unavailable",
     offlineText: "Try again in a few moments.",
@@ -86,12 +74,7 @@ export function AuthPage() {
         await auth.register({
           name: String(data.get("name") || ""),
           email: String(data.get("email") || ""),
-          password: String(data.get("password") || ""),
-          institution: String(data.get("institution") || ""),
-          course: String(data.get("course") || ""),
-          academicStage: String(data.get("academicStage") || ""),
-          availabilityHours: Number(data.get("availabilityHours") || 0),
-          inviteCode: String(data.get("inviteCode") || "")
+          password: String(data.get("password") || "")
         });
       }
     } catch (reason) {
@@ -138,20 +121,15 @@ export function AuthPage() {
 
           {mode === "register" && !auth.hasOwner && <p className="auth-owner-note">{c.firstAccount}</p>}
 
-          <div className="auth-fields">
+          <div className="auth-fields auth-fields-simple">
             {mode === "register" && <label><span>{c.name}</span><input name="name" autoComplete="name" required minLength={2} maxLength={100} /></label>}
             <label><span>{c.email}</span><input name="email" type="email" autoComplete="email" required maxLength={254} defaultValue={mode === "register" ? joinParameters.get("email") || "" : ""} /></label>
-            <label className={mode === "login" ? "auth-field-wide" : ""}><span>{c.password}</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "login" ? 1 : 15} maxLength={128} /><small>{mode === "register" ? c.passwordHint : ""}</small></label>
-            {mode === "register" && <label><span>{c.institution}</span><input name="institution" autoComplete="organization" required maxLength={160} /></label>}
-            {mode === "register" && <label><span>{c.course}</span><input name="course" maxLength={120} /></label>}
-            {mode === "register" && <label><span>{c.stage}</span><input name="academicStage" maxLength={80} placeholder={language === "pt" ? "Ex. 6º período" : "E.g. 3rd year"} /></label>}
-            {mode === "register" && <label><span>{c.availability}</span><input name="availabilityHours" type="number" min={0} max={80} defaultValue={8} /></label>}
-            {mode === "register" && auth.hasOwner && <label className="auth-field-wide"><span>{c.inviteCode}</span><input name="inviteCode" required maxLength={80} autoComplete="one-time-code" defaultValue={joinParameters.get("code") || ""} /><small>{c.inviteHint}</small></label>}
+            <label><span>{c.password}</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "login" ? 1 : 15} maxLength={128} /><small>{mode === "register" ? c.passwordHint : ""}</small></label>
           </div>
 
           {error && <div className="auth-error" role="alert">{error}</div>}
           <button className="auth-submit" type="submit" disabled={busy}>{busy ? <RefreshCw className="auth-spinner" aria-hidden="true" /> : mode === "login" ? <KeyRound aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}{mode === "login" ? c.enter : c.create}</button>
-          {auth.hasOwner && <button className="auth-mode-switch" type="button" onClick={() => { setMode((current) => current === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? c.noAccount : c.hasAccount}</button>}
+          <button className="auth-mode-switch" type="button" onClick={() => { setMode((current) => current === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? c.noAccount : c.hasAccount}</button>
         </form>
       </section>
     </main>

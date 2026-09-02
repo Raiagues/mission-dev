@@ -20,7 +20,7 @@ import { UserBadge } from "../components/UserBadge";
 import { ApiError, useAuth } from "../lib/auth";
 import type { MissionProject } from "../lib/projectStore";
 import { memberInitials } from "../lib/team";
-import type { TeamMember } from "../lib/team";
+import type { TeamMember, TeamRecord } from "../lib/team";
 import type { Language } from "../lib/types";
 import "../team-page.css";
 
@@ -34,7 +34,7 @@ type Props = {
 };
 
 type TeamView = "list" | "chart";
-type Invitation = { email: string; code: string; url: string };
+type Invitation = { email: string; url: string };
 
 function roleName(project: MissionProject, roleId: string, fallback: string) {
   return project.context.roles.find((role) => role.id === roleId)?.name || fallback;
@@ -44,9 +44,9 @@ function sectorName(project: MissionProject, sectorId: string) {
   return project.context.sectors.find((sector) => sector.id === sectorId)?.name || "";
 }
 
-function invitationUrl(email: string, code: string) {
+function invitationUrl(email: string) {
   const url = new URL(window.location.href);
-  url.hash = `#/join?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
+  url.hash = "#/join?email=" + encodeURIComponent(email);
   return url.toString();
 }
 
@@ -97,7 +97,7 @@ function ProfileDialog({ member, language, busy, canRemove, onSave, onRemove, on
         <div className="team-form-grid">
           <label><span>{c.name}</span><input name="displayName" minLength={2} maxLength={100} required={Boolean(member)} defaultValue={member?.displayName || ""} placeholder={!member ? c.nameHint : ""} /></label>
           <label><span>{c.email}</span><input name="email" type="email" required maxLength={254} readOnly={Boolean(member?.accountId)} defaultValue={member?.email || ""} /></label>
-          {member && <label><span>{c.university}</span><input name="institution" required maxLength={160} defaultValue={member.institution || ""} /></label>}
+          {member && <label><span>{c.university}</span><input name="institution" maxLength={160} defaultValue={member.institution || ""} /></label>}
           {member && <label><span>{c.course}</span><input name="course" maxLength={120} defaultValue={member.course || ""} /></label>}
           {member && <label><span>{c.semester}</span><input name="academicStage" maxLength={80} defaultValue={member.academicStage || ""} /></label>}
           {member && <label><span>{c.availability}</span><input name="availabilityHours" type="number" min={0} max={80} defaultValue={member.availabilityHours ?? 0} /></label>}
@@ -115,6 +115,7 @@ function ProfileDialog({ member, language, busy, canRemove, onSave, onRemove, on
 export function TeamPage({ language, project, t, onLanguageChange, onBack, onProjectSetup }: Props) {
   const auth = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [team, setTeam] = useState<TeamRecord | null>(null);
   const [view, setView] = useState<TeamView>("list");
   const [dialogMember, setDialogMember] = useState<TeamMember | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -143,7 +144,7 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
     configure: "Configurar estrutura do projeto",
     chartEmpty: "Selecione pessoas e atribua cargos na configuração do projeto.",
     invitationReady: "Convite pronto",
-    invitationText: "Abra seu e-mail para enviar o link de acesso. O código expira em 7 dias.",
+    invitationText: "Envie este link por e-mail. A pessoa cria a conta normalmente e entra na equipe automaticamente.",
     sendEmail: "Enviar por e-mail",
     copy: "Copiar link",
     copied: "Link copiado.",
@@ -169,7 +170,7 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
     configure: "Configure project structure",
     chartEmpty: "Select people and assign roles in project setup.",
     invitationReady: "Invitation ready",
-    invitationText: "Open your email client to send the access link. The code expires in 7 days.",
+    invitationText: "Send this link by email. The person creates an account normally and joins the team automatically.",
     sendEmail: "Send by email",
     copy: "Copy link",
     copied: "Link copied.",
@@ -179,14 +180,19 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
   const loadMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await auth.api<{ members: TeamMember[] }>("/team/members");
-      setMembers(response.members);
+      const [memberResponse, teamResponse] = await Promise.all([
+        auth.api<{ members: TeamMember[] }>("/team/members"),
+        auth.api<{ teams: TeamRecord[] }>("/teams")
+      ]);
+      const currentTeam = teamResponse.teams.find((item) => item.id === project.context.teamId) ?? null;
+      setTeam(currentTeam);
+      setMembers(currentTeam ? memberResponse.members.filter((member) => currentTeam.memberIds.includes(member.id)) : []);
     } catch (reason) {
       setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
     } finally {
       setLoading(false);
     }
-  }, [auth.api, c.loadError]);
+  }, [auth.api, c.loadError, project.context.teamId]);
 
   useEffect(() => { void loadMembers(); }, [loadMembers]);
 
@@ -232,11 +238,11 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
           })
         });
       } else {
-        const response = await auth.api<{ invitationCode: string }>("/team/members", {
+        await auth.api("/team/members", {
           method: "POST",
-          body: JSON.stringify({ displayName, email })
+          body: JSON.stringify({ displayName, email, teamId: team?.id || project.context.teamId || undefined })
         });
-        setInvitation({ email, code: response.invitationCode, url: invitationUrl(email, response.invitationCode) });
+        setInvitation({ email, url: invitationUrl(email) });
       }
       setDialogMember(undefined);
       await loadMembers();
@@ -251,7 +257,8 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
     if (!dialogMember) return;
     setBusy(true);
     try {
-      await auth.api(`/team/members/${dialogMember.id}`, { method: "DELETE" });
+      if (team?.id) await auth.api("/teams/" + team.id + "/members/" + dialogMember.id, { method: "DELETE" });
+      else await auth.api("/team/members/" + dialogMember.id, { method: "DELETE" });
       setDialogMember(undefined);
       await loadMembers();
     } catch (reason) {
@@ -265,8 +272,8 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
     if (!invitation) return;
     const subject = language === "pt" ? "Convite para a equipe no Norte" : "Invitation to the team on Norte";
     const body = language === "pt"
-      ? `Você foi convidado(a) para nossa equipe no Norte.\n\nAcesse: ${invitation.url}\n\nCódigo: ${invitation.code}`
-      : `You were invited to our team on Norte.\n\nOpen: ${invitation.url}\n\nCode: ${invitation.code}`;
+      ? "Você foi convidado(a) para nossa equipe no Norte.\n\nAcesse: " + invitation.url
+      : "You were invited to our team on Norte.\n\nOpen: " + invitation.url;
     window.location.href = `mailto:${encodeURIComponent(invitation.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
@@ -278,13 +285,13 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
 
         <section className="team-page-surface">
           {loading && <div className="team-page-loading"><LoaderCircle aria-hidden="true" /></div>}
-          {!loading && view === "list" && <div className="team-table-wrap"><div className="team-table-head"><span>{c.person}</span><span>{c.academic}</span><span>{c.availability}</span><span>{c.projectRole}</span><span>{c.status}</span><span /></div>{memberRows.map(({ member, role, sector }) => <div className="team-table-row" key={member.id}><div className="team-person"><span>{memberInitials(member.displayName)}</span><div><strong>{member.displayName}</strong><small>{member.email}</small></div></div><div><strong>{member.course || "—"}</strong><small>{[member.institution, member.academicStage].filter(Boolean).join(" · ") || "—"}</small></div><div><strong>{member.availabilityHours ?? 0} {c.hours}</strong></div><div><strong>{role}</strong><small>{sector}</small></div><div><span className={`team-account-status ${member.accountStatus}`}>{member.accountStatus === "active" ? c.active : c.waiting}</span></div><button type="button" disabled={!canEdit(member)} onClick={() => setDialogMember(member)} aria-label={`${language === "pt" ? "Editar" : "Edit"} ${member.displayName}`}><Pencil aria-hidden="true" /></button></div>)}{memberRows.length === 0 && <div className="team-page-empty"><UsersRound aria-hidden="true" /><span>{c.empty}</span>{canManage && <button type="button" onClick={() => setDialogMember(null)}><Plus aria-hidden="true" />{c.invite}</button>}</div>}</div>}
+          {!loading && view === "list" && <div className="team-table-wrap"><div className="team-table-head"><span>{c.person}</span><span>{c.academic}</span><span>{c.availability}</span><span>{c.projectRole}</span><span>{c.status}</span><span /></div>{memberRows.map(({ member, role, sector }) => <div className="team-table-row" key={member.id}><div className="team-person"><span className={member.avatarUrl ? "has-photo" : ""}>{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : memberInitials(member.displayName)}</span><div><strong>{member.displayName}</strong><small>{member.email}</small></div></div><div><strong>{member.course || "—"}</strong><small>{[member.institution, member.academicStage].filter(Boolean).join(" · ") || "—"}</small></div><div><strong>{member.availabilityHours ?? 0} {c.hours}</strong></div><div><strong>{role}</strong><small>{sector}</small></div><div><span className={`team-account-status ${member.accountStatus}`}>{member.accountStatus === "active" ? c.active : c.waiting}</span></div><button type="button" disabled={!canEdit(member)} onClick={() => setDialogMember(member)} aria-label={`${language === "pt" ? "Editar" : "Edit"} ${member.displayName}`}><Pencil aria-hidden="true" /></button></div>)}{memberRows.length === 0 && <div className="team-page-empty"><UsersRound aria-hidden="true" /><span>{c.empty}</span>{canManage && <button type="button" onClick={() => setDialogMember(null)}><Plus aria-hidden="true" />{c.invite}</button>}</div>}</div>}
 
           {!loading && view === "chart" && <div className="team-org-chart">
             {assignedRows.length === 0 ? <div className="team-page-empty"><GitFork aria-hidden="true" /><span>{c.chartEmpty}</span><button type="button" onClick={onProjectSetup}>{c.configure}</button></div> : <>
-              <div className="org-level org-leads">{leadRows.map((row) => <article key={row.member.id}><span>{memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div>
+              <div className="org-level org-leads">{leadRows.map((row) => <article key={row.member.id}><span className={row.member.avatarUrl ? "has-photo" : ""}>{row.member.avatarUrl ? <img src={row.member.avatarUrl} alt="" /> : memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div>
               {(sectorGroups.length > 0 || ungroupedRows.length > 0) && <div className="org-stem" />}
-              <div className="org-groups">{sectorGroups.map(({ sector, rows }) => <section key={sector.id}><h2>{sector.name}</h2><div>{rows.filter((row) => !leadRows.some((lead) => lead.member.id === row.member.id)).map((row) => <article key={row.member.id}><span>{memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div></section>)}{ungroupedRows.length > 0 && <section><h2>{language === "pt" ? "Sem setor" : "No sector"}</h2><div>{ungroupedRows.map((row) => <article key={row.member.id}><span>{memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div></section>}</div>
+              <div className="org-groups">{sectorGroups.map(({ sector, rows }) => <section key={sector.id}><h2>{sector.name}</h2><div>{rows.filter((row) => !leadRows.some((lead) => lead.member.id === row.member.id)).map((row) => <article key={row.member.id}><span className={row.member.avatarUrl ? "has-photo" : ""}>{row.member.avatarUrl ? <img src={row.member.avatarUrl} alt="" /> : memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div></section>)}{ungroupedRows.length > 0 && <section><h2>{language === "pt" ? "Sem setor" : "No sector"}</h2><div>{ungroupedRows.map((row) => <article key={row.member.id}><span className={row.member.avatarUrl ? "has-photo" : ""}>{row.member.avatarUrl ? <img src={row.member.avatarUrl} alt="" /> : memberInitials(row.member.displayName)}</span><strong>{row.member.displayName}</strong><small>{row.role}</small></article>)}</div></section>}</div>
             </>}
           </div>}
         </section>
@@ -293,6 +300,6 @@ export function TeamPage({ language, project, t, onLanguageChange, onBack, onPro
     </main>
 
     {dialogMember !== undefined && <ProfileDialog member={dialogMember} language={language} busy={busy} canRemove={canRemove} onSave={(event) => void saveMember(event)} onRemove={() => void removeMember()} onClose={() => setDialogMember(undefined)} />}
-    {invitation && <div className="invitation-panel" role="dialog" aria-modal="true" aria-labelledby="invitation-title"><header><div><span>{c.invitationReady}</span><h2 id="invitation-title">{invitation.email}</h2></div><button type="button" onClick={() => setInvitation(null)} aria-label="Fechar"><X aria-hidden="true" /></button></header><p>{c.invitationText}</p><code>{invitation.code}</code><footer><button type="button" onClick={() => { void navigator.clipboard.writeText(invitation.url); setFeedback(c.copied); }}><Clipboard aria-hidden="true" />{c.copy}</button><button className="primary" type="button" onClick={openInvitationEmail}><Send aria-hidden="true" />{c.sendEmail}</button></footer></div>}
+    {invitation && <div className="invitation-panel" role="dialog" aria-modal="true" aria-labelledby="invitation-title"><header><div><span>{c.invitationReady}</span><h2 id="invitation-title">{invitation.email}</h2></div><button type="button" onClick={() => setInvitation(null)} aria-label="Fechar"><X aria-hidden="true" /></button></header><p>{c.invitationText}</p><footer><button type="button" onClick={() => { void navigator.clipboard.writeText(invitation.url); setFeedback(c.copied); }}><Clipboard aria-hidden="true" />{c.copy}</button><button className="primary" type="button" onClick={openInvitationEmail}><Send aria-hidden="true" />{c.sendEmail}</button></footer></div>}
   </div>;
 }
