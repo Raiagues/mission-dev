@@ -635,8 +635,8 @@
 .pm-artifacts-board {
   display: grid;
   min-height: 0;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   padding-top: 10px;
   border-top: 1px solid rgba(91, 155, 208, .24);
   overflow: hidden;
@@ -651,7 +651,7 @@
   position: relative;
   width: 310px;
   height: 100%;
-  min-height: 112px;
+  min-height: 92px;
   flex: 0 0 310px;
   border: 1px solid rgba(83, 151, 208, .32);
   border-radius: 6px;
@@ -911,7 +911,19 @@
   max-height: 185px;
   padding: 14px 20px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2b648f #061629;
 }
+
+.pm-program-picker::-webkit-scrollbar,
+.pm-program-detail::-webkit-scrollbar,
+.pm-selection-list::-webkit-scrollbar { width: 9px; }
+.pm-program-picker::-webkit-scrollbar-track,
+.pm-program-detail::-webkit-scrollbar-track,
+.pm-selection-list::-webkit-scrollbar-track { background: #061629; }
+.pm-program-picker::-webkit-scrollbar-thumb,
+.pm-program-detail::-webkit-scrollbar-thumb,
+.pm-selection-list::-webkit-scrollbar-thumb { border: 2px solid #061629; border-radius: 6px; background: #2b648f; }
 
 .pm-program-picker > button {
   position: relative;
@@ -1004,6 +1016,8 @@
   max-height: calc(100dvh - 390px);
   padding: 0 20px 18px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2b648f #061629;
 }
 
 .pm-program-detail-heading {
@@ -1086,6 +1100,8 @@
   text-transform: uppercase;
 }
 
+.pm-official-library h3 span { margin-left: 9px; color: #6fc8a9; font-size: 9px; font-weight: 560; text-transform: none; }
+
 .pm-official-library > div {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1137,10 +1153,21 @@
 }
 
 .pm-team-config {
-  max-height: calc(100dvh - 235px);
   padding: 16px 20px;
-  overflow-y: auto;
 }
+
+.pm-team-config-dialog { width: min(1180px, 100%); }
+.pm-team-config-dialog .pm-team-config { padding: 14px 16px 0; }
+.pm-team-config-dialog .pm-dialog-field { margin-bottom: 10px; }
+
+.pm-program-import { position: fixed; z-index: 145; top: 82px; left: 50%; display: grid; width: min(640px, calc(100% - 48px)); grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px; padding: 10px 14px; color: #dff8ef; border: 1px solid rgba(62, 212, 173, .42); border-radius: 5px; background: #07332f; box-shadow: 0 16px 44px rgba(0, 0, 0, .34); transform: translateX(-50%); }
+.pm-program-import > span { display: grid; width: 34px; height: 34px; place-items: center; color: #56d9b2; border: 1px solid rgba(62, 212, 173, .34); border-radius: 50%; }
+.pm-program-import svg { width: 17px; }
+.pm-program-import > div { display: grid; gap: 7px; }
+.pm-program-import strong { font-size: 11px; font-weight: 560; }
+.pm-program-import i { display: block; width: 100%; height: 2px; overflow: hidden; background: rgba(62, 212, 173, .16); }
+.pm-program-import i::after { content: ""; display: block; width: 42%; height: 100%; background: #4fd4ac; animation: pm-import 1.1s ease-in-out infinite; }
+@keyframes pm-import { from { transform: translateX(-110%); } to { transform: translateX(250%); } }
 
 .pm-dialog-empty {
   display: flex;
@@ -1290,6 +1317,8 @@
   gap: 7px;
   padding: 15px 20px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2b648f #061629;
 }
 
 .pm-selection-list > label {
@@ -1472,20 +1501,21 @@
   .pm-heading h1 { font-size: 30px; }
 }
 
-@media (max-height: 760px) and (min-width: 761px) {
+@media (max-height: 820px) and (min-width: 761px) {
   .pm-main { grid-template-rows: 62px minmax(0, 1fr); }
   .pm-workspace {
-    grid-template-rows: auto 120px 148px minmax(160px, 1fr) 48px;
-    gap: 10px;
-    padding: 14px 0 10px;
+    grid-template-rows: auto 112px 132px minmax(250px, 1fr) 46px;
+    gap: 8px;
+    padding: 12px 0 8px;
   }
   .pm-heading h1 { font-size: 28px; }
   .pm-heading p { font-size: 11px; }
   .pm-program-card { padding-top: 22px; }
-  .pm-program-logo { width: 62px; height: 62px; }
-  .pm-band { grid-template-rows: 40px minmax(0, 1fr); }
+  .pm-program-logo { width: 58px; height: 58px; }
+  .pm-band { grid-template-rows: 36px minmax(0, 1fr); }
   .pm-band header p { display: none; }
   .pm-artifacts-board { padding-top: 7px; }
+  .pm-artifact-card { min-height: 86px; }
   .pm-footer { padding-top: 5px; }
 }
 
@@ -1529,6 +1559,7 @@
     padding: 22px 0 16px;
     overflow: visible;
   }
+  .pm-program-import { top: 72px; width: calc(100% - 24px); }
   .pm-heading {
     display: block;
     margin-bottom: 18px;

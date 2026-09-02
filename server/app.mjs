@@ -666,11 +666,51 @@ export async function buildApp(options = {}) {
           createdBy: canSeePrivateData ? team.createdBy : null,
           memberCount: team.memberIds.length,
           artifactCount: team.artifactIds.length,
+          projectCount: team.projectCount ?? Object.values(data.workspace.projects || {}).filter((record) => record?.document?.context?.teamId === team.id).length,
           membership,
           canManage
         };
       })
     };
+  });
+
+  app.get("/api/teams/:id/projects", {
+    preHandler: [requireAuth],
+    schema: {
+      tags: ["Team"], summary: "List a team's projects and project participants", security: [{ sessionCookie: [] }],
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(100, 1) } }
+    }
+  }, async (request) => {
+    const data = store.read();
+    const team = data.teams.find((item) => item.id === request.params.id);
+    if (!team) throw httpError(404, "TEAM_NOT_FOUND", "Team was not found.");
+    if (!team.memberIds.includes(request.auth.user.memberId) && !canManageNamedTeam(data, request.auth.user, team)) {
+      throw httpError(403, "FORBIDDEN", "Join this team to see its projects.");
+    }
+    const projects = Object.values(data.workspace.projects || {})
+      .filter((record) => record?.document?.context?.teamId === team.id)
+      .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)))
+      .map((record) => {
+        const context = record.document.context || {};
+        const roles = new Map((context.roles || []).map((item) => [item.id, item.name]));
+        const sectors = new Map((context.sectors || []).map((item) => [item.id, item.name]));
+        return {
+          ...projectSummary(record),
+          participants: (context.assignments || []).map((assignment) => {
+            const member = data.members.find((item) => item.id === assignment.memberId);
+            return {
+              memberId: assignment.memberId,
+              displayName: member?.displayName || "Member",
+              avatarUrl: member?.avatarUrl || "",
+              roleId: assignment.roleId,
+              roleName: roles.get(assignment.roleId) || assignment.roleId,
+              sectorId: assignment.sectorId,
+              sectorName: sectors.get(assignment.sectorId) || ""
+            };
+          })
+        };
+      });
+    return { projects };
   });
 
   app.get("/api/directory/members", {

@@ -70,7 +70,10 @@ await page.locator(".pm-dialog").getByRole("button", { name: "Salvar" }).click()
 if (await teamArtifactRows.count() !== initialTeamArtifactCount) throw new Error("A team artifact should be linkable again.");
 
 await page.locator(".pm-team-band").getByRole("button", { name: "Configurar equipe" }).click();
-if (await page.locator(".pm-team-member-list article").count() < 4) throw new Error("The demo team should expose the captain and three mock members.");
+if (await page.locator(".ptc-list-scroll > article").count() < 4) throw new Error("The demo team should expose the captain and three mock members.");
+await page.getByRole("button", { name: "Hierarquia", exact: true }).click();
+if (await page.locator(".ptc-group").count() < 3) throw new Error("The team configurator should show persisted sector columns.");
+await page.screenshot({ path: "/tmp/norte-team-config-hierarchy.png", fullPage: true });
 await page.locator(".pm-dialog").getByRole("button", { name: "Fechar" }).click();
 
 await page.locator(".pm-topbar .account-badge-trigger").click();
@@ -83,7 +86,8 @@ await page.locator(".profile-dialog").getByRole("button", { name: "Fechar" }).cl
 
 await page.goto(baseUrl + "#/teams", { waitUntil: "networkidle" });
 await page.locator(".teams-hub-layout").waitFor();
-if (await page.locator(".teams-hub-tabs > button").count() !== 3) throw new Error("Teams should separate private teams, community, and people.");
+if (await page.locator(".teams-hub-tabs > button").count() !== 2) throw new Error("Teams should separate private teams and the OBSAT community.");
+if (await page.locator(".teams-project-list > article").count() < 2) throw new Error("A private team should show its associated projects.");
 await page.screenshot({ path: "/tmp/norte-teams-private.png", fullPage: true });
 
 await page.getByRole("button", { name: /Comunidade/u }).click();
@@ -91,12 +95,6 @@ await page.locator(".teams-private-notice").waitFor();
 if (await page.locator(".teams-member-list article").count()) throw new Error("Public team profiles must not expose the private member list.");
 if (await page.locator(".teams-artifact-list article").count()) throw new Error("Public team profiles must not expose private artifacts.");
 await page.screenshot({ path: "/tmp/norte-teams-community.png", fullPage: true });
-
-await page.getByRole("button", { name: /Pessoas/u }).click();
-await page.locator(".teams-people-view").waitFor();
-if (await page.locator(".teams-people-grid article").count() < 5) throw new Error("The demo directory should make active platform members visible.");
-if ((await page.locator(".teams-people-grid").innerText()).includes("@norte.demo")) throw new Error("The public people directory must not expose email addresses.");
-await page.screenshot({ path: "/tmp/norte-people-directory.png", fullPage: true });
 
 await page.getByRole("button", { name: /Minhas equipes/u }).click();
 await page.locator(".teams-hub-layout").waitFor();
@@ -143,9 +141,9 @@ if (await page.locator(".pm-official-library a").count() < 2) throw new Error("P
 await page.locator(".pm-dialog").getByRole("button", { name: "Salvar" }).click();
 await page.locator(".pm-team-band .pm-track-empty").click();
 await page.locator(".pm-team-config > label select").selectOption("team-aurora");
-const memberChoices = page.locator(".pm-team-member-list article:not(.selected) .pm-member-toggle");
+const memberChoices = page.locator(".ptc-list-scroll > article:not(.selected) > label");
 while (await memberChoices.count()) await memberChoices.first().click();
-await page.locator(".pm-dialog").getByRole("button", { name: "Salvar" }).click();
+await page.locator(".pm-dialog").getByRole("button", { name: /Salvar configuração/u }).click();
 if (await page.locator(".pm-footer > button").isDisabled()) throw new Error("A complete project memory should enable project creation.");
 await page.screenshot({ path: "/tmp/norte-memory-new.png", fullPage: true });
 await page.locator(".pm-footer > button").click();

@@ -53,6 +53,7 @@ export type TeamRecord = {
   canManage?: boolean;
   memberCount?: number;
   artifactCount?: number;
+  projectCount?: number;
 };
 
 export type ConnectedArtifact = {
@@ -89,6 +90,20 @@ export type ProjectSummary = {
   teamId: string | null;
   updatedAt: string;
   memberCount: number;
+};
+
+export type TeamProjectParticipant = {
+  memberId: string;
+  displayName: string;
+  avatarUrl?: string;
+  roleId: string;
+  roleName: string;
+  sectorId: string;
+  sectorName: string;
+};
+
+export type TeamProjectSummary = ProjectSummary & {
+  participants: TeamProjectParticipant[];
 };
 
 export function memberInitials(name: string): string {

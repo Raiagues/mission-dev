@@ -5,6 +5,28 @@ import { randomUUID } from "node:crypto";
 const DEFAULT_TEAM_ID = "team-aurora";
 const TEAM_ARTIFACT_IDS = ["team-aurora-report", "team-aurora-lessons"];
 const MOCK_MEMBER_IDS = ["aurora-lucas", "aurora-marina", "aurora-rafael"];
+const OBSAT_COMMUNITY = [
+  { id: "team-zenith", name: "Zenith CubeSat", institution: "Universidade Federal de Minas Gerais", description: "Equipe OBSAT dedicada a CubeSats e sistemas embarcados.", people: ["Ana Luiza Prado", "Caio Mendes", "Helena Vaz"] },
+  { id: "team-sirius", name: "Sirius Nanosat", institution: "Instituto Federal de Santa Catarina", description: "Equipe OBSAT de instrumentação, telemetria e operação de pequenos satélites.", people: ["Beatriz Sampaio", "Matheus Lima", "Yuri Campos"] },
+  { id: "team-caracara", name: "Carcará Space", institution: "Universidade Federal de Pernambuco", description: "Equipe OBSAT voltada a sensoriamento remoto e monitoramento ambiental.", people: ["Lívia Moura", "João Vieira", "Noemi Alves"] },
+  { id: "team-gauchosat", name: "GaúchoSat Lab", institution: "Universidade Federal do Rio Grande do Sul", description: "Equipe OBSAT de comunicação, energia e testes de missão.", people: ["Aline Rocha", "Davi Reis", "Pedro Silveira"] }
+];
+
+function communityMembers(createdAt) {
+  return OBSAT_COMMUNITY.flatMap((team) => team.people.map((displayName, index) => ({
+    id: `${team.id}-member-${index + 1}`,
+    accountId: null,
+    displayName,
+    email: `${team.id}-${index + 1}@norte.demo`,
+    missionRole: index === 0 ? "captain" : index === 1 ? "manager" : "member",
+    primaryArea: index === 0 ? "systems" : index === 1 ? "electronics" : "flight_software",
+    secondaryAreas: [],
+    institution: team.institution,
+    course: index === 2 ? "Ciência da Computação" : "Engenharia Aeroespacial",
+    academicStage: `${5 + index}º período`,
+    skills: [], availabilityHours: 7 + index, notes: "", accountStatus: "active", accessRole: null, avatarUrl: "", createdAt, updatedAt: createdAt
+  })));
+}
 
 function defaultMembers(createdAt) {
   return [
@@ -25,7 +47,8 @@ function defaultMembers(createdAt) {
       missionRole: "member", primaryArea: "structures", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
       course: "Engenharia Mecânica", academicStage: "8º período", skills: [], availabilityHours: 6, notes: "",
       accountStatus: "invited", accessRole: null, avatarUrl: "", createdAt, updatedAt: createdAt
-    }
+    },
+    ...communityMembers(createdAt)
   ];
 }
 
@@ -87,13 +110,19 @@ function defaultTeams(createdAt) {
     createdBy: null,
     createdAt,
     updatedAt: createdAt
-  }];
+  }, ...OBSAT_COMMUNITY.map((team, teamIndex) => ({
+    id: team.id,
+    name: team.name,
+    description: team.description,
+    memberIds: team.people.map((_, index) => `${team.id}-member-${index + 1}`),
+    artifactIds: [], joinRequests: [], projectCount: [2, 1, 3, 2][teamIndex], createdBy: null, createdAt, updatedAt: createdAt
+  }))];
 }
 
 export function createInitialData() {
   const timestamp = new Date().toISOString();
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     createdAt: timestamp,
     updatedAt: timestamp,
     users: [],
@@ -110,12 +139,12 @@ export function createInitialData() {
 }
 
 export function normalizeStoredData(value) {
-  if (!value || ![1, 2, 3, 4, 5, 6].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
+  if (!value || ![1, 2, 3, 4, 5, 6, 7].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
     throw new Error("Unsupported Norte data schema.");
   }
   const migratingTeams = !Array.isArray(value.teams);
   const data = structuredClone(value);
-  data.schemaVersion = 6;
+  data.schemaVersion = 7;
   data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
   data.workspace = data.workspace && typeof data.workspace === "object" && !Array.isArray(data.workspace)
     ? data.workspace
@@ -127,6 +156,11 @@ export function normalizeStoredData(value) {
   data.members = data.members.filter((member) => member.accountStatus !== "demo" || Boolean(member.accountId));
   if (value.schemaVersion < 5) {
     for (const member of defaultMembers(data.createdAt || new Date().toISOString())) {
+      if (!data.members.some((item) => item.id === member.id)) data.members.push(member);
+    }
+  }
+  if (value.schemaVersion < 7) {
+    for (const member of communityMembers(data.createdAt || new Date().toISOString())) {
       if (!data.members.some((item) => item.id === member.id)) data.members.push(member);
     }
   }
@@ -156,6 +190,11 @@ export function normalizeStoredData(value) {
 
   data.teams = Array.isArray(data.teams) ? data.teams : [];
   if (value.schemaVersion < 6 && !data.teams.some((team) => team.id === DEFAULT_TEAM_ID)) data.teams.unshift(defaultTeams(data.createdAt || new Date().toISOString())[0]);
+  if (value.schemaVersion < 7) {
+    for (const team of defaultTeams(data.createdAt || new Date().toISOString()).slice(1)) {
+      if (!data.teams.some((item) => item.id === team.id)) data.teams.push(team);
+    }
+  }
   const primaryTeam = data.teams.find((team) => team.id === DEFAULT_TEAM_ID);
   if (primaryTeam) {
     primaryTeam.memberIds = [...new Set([...(Array.isArray(primaryTeam.memberIds) ? primaryTeam.memberIds : []), ...(migratingTeams ? data.members.map((member) => member.id) : [])])];

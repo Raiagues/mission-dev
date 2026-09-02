@@ -448,6 +448,14 @@ test("public directories hide private team data and project lifecycle controls d
     board: { nodes: [], links: [] }
   };
   assert.equal((await app.inject({ method: "POST", url: "/api/projects", headers: ownerHeaders, payload: project })).statusCode, 201);
+  const teamProjects = await app.inject({ method: "GET", url: `/api/teams/${teamId}/projects`, headers: ownerHeaders });
+  assert.equal(teamProjects.statusCode, 200);
+  assert.equal(teamProjects.json().projects[0].id, project.id);
+  assert.equal(teamProjects.json().projects[0].participants[0].displayName, "Capitã Norte");
+  const privateProjects = await app.inject({ method: "GET", url: `/api/teams/${teamId}/projects`, headers: { cookie: outsiderCookie } });
+  assert.equal(privateProjects.statusCode, 403);
+  const teamsWithCount = await app.inject({ method: "GET", url: "/api/teams", headers: { cookie: outsiderCookie } });
+  assert.equal(teamsWithCount.json().teams.find((team) => team.id === teamId).projectCount, 1);
   const teamInUse = await app.inject({ method: "DELETE", url: `/api/teams/${teamId}`, headers: ownerHeaders });
   assert.equal(teamInUse.statusCode, 409);
   assert.equal(teamInUse.json().error, "TEAM_IN_USE");

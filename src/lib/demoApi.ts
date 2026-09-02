@@ -1,14 +1,14 @@
 import { createEmptyProject } from "./projectStore";
 import type { MissionProject } from "./projectStore";
-import type { ConnectedArtifact, DirectoryMember, ProjectSummary, SessionUser, TeamMember, TeamRecord } from "./team";
+import type { ConnectedArtifact, DirectoryMember, ProjectSummary, SessionUser, TeamMember, TeamProjectSummary, TeamRecord } from "./team";
 
 const STORAGE_KEY = "norte-pages-demo-v2";
 const LEGACY_STORAGE_KEY = "norte-pages-demo-v1";
-const DEMO_SCHEMA_VERSION = 4;
+const DEMO_SCHEMA_VERSION = 5;
 const TEAM_ID = "team-aurora";
 const PROJECT_ID = "mission-aurora-demo";
 const MOCK_MEMBER_IDS = ["aurora-lucas", "aurora-marina", "aurora-rafael"];
-const COMMUNITY_MEMBER_IDS = ["zenith-ana", "zenith-caio", "icarus-beatriz", "icarus-matheus"];
+const COMMUNITY_MEMBER_IDS = ["zenith-ana", "zenith-caio", "sirius-beatriz", "sirius-matheus"];
 const avatarUrl = `${import.meta.env.BASE_URL}profiles/emily-raiane.png`;
 
 type DemoState = {
@@ -60,7 +60,46 @@ function demoProject(now: string): MissionProject {
       teamName: "Equipe Aurora",
       teamArtifactIds: ["team-aurora-report", "team-aurora-lessons"],
       projectArtifactIds: ["norte-aurora-telemetry"],
-      assignments: [{ memberId: DEMO_USER.memberId, roleId: "captain", sectorId: "" }]
+      sectors: [
+        { id: "systems", name: "Sistemas" },
+        { id: "electronics", name: "Eletrônica e aviônica" },
+        { id: "software", name: "Software de voo" }
+      ],
+      assignments: [
+        { memberId: DEMO_USER.memberId, roleId: "captain", sectorId: "systems" },
+        { memberId: MOCK_MEMBER_IDS[0], roleId: "manager", sectorId: "electronics" },
+        { memberId: MOCK_MEMBER_IDS[1], roleId: "member", sectorId: "software" },
+        { memberId: MOCK_MEMBER_IDS[2], roleId: "member", sectorId: "systems" }
+      ]
+    }
+  };
+}
+
+function demoPayloadProject(now: string): MissionProject {
+  const project = createEmptyProject("pt");
+  return {
+    ...project,
+    id: "mission-sentinel-demo",
+    name: "Payload Sentinel",
+    createdAt: now,
+    updatedAt: now,
+    context: {
+      ...project.context,
+      configured: true,
+      programId: "obsat",
+      modalityId: "practical",
+      categoryId: "n3",
+      teamId: TEAM_ID,
+      teamName: "Equipe Aurora",
+      sectors: [
+        { id: "payload", name: "Payload" },
+        { id: "operations", name: "Operações" }
+      ],
+      assignments: [
+        { memberId: DEMO_USER.memberId, roleId: "captain", sectorId: "operations" },
+        { memberId: MOCK_MEMBER_IDS[1], roleId: "manager", sectorId: "payload" },
+        { memberId: MOCK_MEMBER_IDS[2], roleId: "member", sectorId: "payload" }
+      ]
     }
   };
 }
@@ -68,6 +107,7 @@ function demoProject(now: string): MissionProject {
 function initialState(): DemoState {
   const now = timestamp();
   const project = demoProject(now);
+  const payloadProject = demoPayloadProject(now);
   const members: TeamMember[] = [{
     id: DEMO_USER.memberId,
     accountId: DEMO_USER.id,
@@ -154,8 +194,8 @@ function initialState(): DemoState {
     canManage: true
   }, {
     id: "team-zenith",
-    name: "Zenith Aerospace",
-    description: "Equipe universitária dedicada a CubeSats e sistemas embarcados.",
+    name: "Zenith CubeSat",
+    description: "Equipe OBSAT dedicada a CubeSats e sistemas embarcados.",
     memberIds: [COMMUNITY_MEMBER_IDS[0], COMMUNITY_MEMBER_IDS[1]],
     artifactIds: [],
     joinRequests: [],
@@ -164,24 +204,40 @@ function initialState(): DemoState {
     updatedAt: now,
     membership: "available",
     canManage: false,
-    memberCount: 2,
-    artifactCount: 0
+    memberCount: 7,
+    artifactCount: 0,
+    projectCount: 2
   }, {
-    id: "team-icarus",
-    name: "Ícaro Aerodesign",
-    description: "Equipe de competição em projeto, fabricação e ensaios de aeronaves.",
+    id: "team-sirius",
+    name: "Sirius Nanosat",
+    description: "Equipe OBSAT de instrumentação, telemetria e operação de pequenos satélites.",
     memberIds: [COMMUNITY_MEMBER_IDS[2], COMMUNITY_MEMBER_IDS[3]],
     artifactIds: [],
     joinRequests: [],
-    createdBy: "demo-icarus-beatriz",
+    createdBy: "demo-sirius-beatriz",
     createdAt: now,
     updatedAt: now,
     membership: "available",
     canManage: false,
-    memberCount: 2,
-    artifactCount: 0
+    memberCount: 6,
+    artifactCount: 0,
+    projectCount: 1
+  }, {
+    id: "team-caracara",
+    name: "Carcará Space",
+    description: "Equipe OBSAT voltada a sensoriamento remoto e monitoramento ambiental.",
+    memberIds: ["caracara-livia", "caracara-joao", "caracara-noemi"],
+    artifactIds: [], joinRequests: [], createdBy: "demo-caracara-livia", createdAt: now, updatedAt: now,
+    membership: "available", canManage: false, memberCount: 9, artifactCount: 0, projectCount: 3
+  }, {
+    id: "team-gauchosat",
+    name: "GaúchoSat Lab",
+    description: "Equipe OBSAT de comunicação, energia e testes de missão.",
+    memberIds: ["gauchosat-aline", "gauchosat-davi", "gauchosat-pedro"],
+    artifactIds: [], joinRequests: [], createdBy: "demo-gauchosat-aline", createdAt: now, updatedAt: now,
+    membership: "available", canManage: false, memberCount: 8, artifactCount: 0, projectCount: 2
   }];
-  return { schemaVersion: DEMO_SCHEMA_VERSION, members, artifacts, teams, projects: { [project.id]: project }, project, labs: {} };
+  return { schemaVersion: DEMO_SCHEMA_VERSION, members, artifacts, teams, projects: { [project.id]: project, [payloadProject.id]: payloadProject }, project, labs: {} };
 }
 
 function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoState {
@@ -190,6 +246,9 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   const projects = value.projects && typeof value.projects === "object" ? value.projects : {};
   if (value.project?.id) projects[value.project.id] = value.project;
   if (Object.keys(projects).length === 0 && Number(value.schemaVersion || 0) < DEMO_SCHEMA_VERSION) projects[fresh.project!.id] = fresh.project!;
+  if (migrateMockMembers) {
+    for (const project of Object.values(fresh.projects)) if (!projects[project.id]) projects[project.id] = project;
+  }
   const members = Array.isArray(value.members) ? value.members : fresh.members;
   const owner = members.find((member) => member.accountId === DEMO_USER.id || member.id === DEMO_USER.memberId);
   if (owner) Object.assign(owner, { displayName: DEMO_USER.name, email: DEMO_USER.email, avatarUrl, accountStatus: "active", accessRole: "owner_admin" });
@@ -203,7 +262,7 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   if (seedDefaults) {
     for (const artifact of fresh.artifacts) if (!artifacts.some((item) => item.id === artifact.id)) artifacts.push(artifact);
   }
-  const teams = Array.isArray(value.teams) ? value.teams : fresh.teams;
+  const teams = Array.isArray(value.teams) ? value.teams.filter((team) => team.id !== "team-icarus") : fresh.teams;
   if (migrateMockMembers) {
     for (const team of fresh.teams) if (!teams.some((item) => item.id === team.id)) teams.push(team);
   }
@@ -267,6 +326,7 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
   const teamJoinMatch = path.match(/^\/teams\/([^/]+)\/join-requests$/u);
   const teamMemberMatch = path.match(/^\/teams\/([^/]+)\/members$/u);
   const teamMemberDeleteMatch = path.match(/^\/teams\/([^/]+)\/members\/([^/]+)$/u);
+  const teamProjectsMatch = path.match(/^\/teams\/([^/]+)\/projects$/u);
   const projectMatch = path.match(/^\/projects\/([^/]+)$/u);
   const labMatch = path.match(/^\/workspace\/labs\/([^/]+)$/u);
 
@@ -295,12 +355,37 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
       artifactIds: privateData ? team.artifactIds : [],
       joinRequests: canManage ? team.joinRequests : [],
       createdBy: privateData ? team.createdBy : null,
-      memberCount: team.memberIds.length,
+      memberCount: team.memberCount ?? team.memberIds.length,
       artifactCount: team.artifactIds.length,
+      projectCount: team.projectCount ?? Object.values(state.projects).filter((project) => project.context.teamId === team.id).length,
       membership,
       canManage
     };
   }) } as T;
+  if (teamProjectsMatch && method === "GET") {
+    const team = state.teams.find((item) => item.id === teamProjectsMatch[1]);
+    if (!team || !team.memberIds.includes(DEMO_USER.memberId)) throw new Error("Join this team to see its projects.");
+    const projects: TeamProjectSummary[] = Object.values(state.projects).filter((project) => project.context.teamId === team.id).map((project) => {
+      const roles = new Map(project.context.roles.map((item) => [item.id, item.name]));
+      const sectors = new Map(project.context.sectors.map((item) => [item.id, item.name]));
+      return {
+        ...summary(project),
+        participants: project.context.assignments.map((assignment) => {
+          const member = state.members.find((item) => item.id === assignment.memberId);
+          return {
+            memberId: assignment.memberId,
+            displayName: member?.displayName || "Membro",
+            avatarUrl: member?.avatarUrl,
+            roleId: assignment.roleId,
+            roleName: roles.get(assignment.roleId) || assignment.roleId,
+            sectorId: assignment.sectorId,
+            sectorName: sectors.get(assignment.sectorId) || ""
+          };
+        })
+      };
+    });
+    return { projects } as T;
+  }
   if (path === "/directory/members" && method === "GET") {
     const directory: DirectoryMember[] = state.members.filter((member) => member.accountStatus === "active").map((member, index) => ({
       id: member.accountId || member.id,

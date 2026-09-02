@@ -13,19 +13,18 @@ import {
   GitBranch,
   Link2,
   LoaderCircle,
-  GitFork,
   Pencil,
   Plus,
   Settings2,
   Trash2,
   Unlink2,
-  UserPlus,
   UsersRound,
   X
 } from "lucide-react";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { ArtifactSourceFields } from "../components/ArtifactSourceFields";
 import { UserBadge } from "../components/UserBadge";
+import { ProjectTeamConfigurator } from "../components/ProjectTeamConfigurator";
 import { ApiError, useAuth } from "../lib/auth";
 import { programCategory, programModality, referenceProgram, REFERENCE_PROGRAMS } from "../lib/programs";
 import type { MissionProject, ProjectMemberAssignment } from "../lib/projectStore";
@@ -50,8 +49,6 @@ type Props = {
 type DialogState =
   | { type: "program" }
   | { type: "team" }
-  | { type: "new-member" }
-  | { type: "structure" }
   | { type: "team-artifacts" }
   | { type: "artifact"; scope: ArtifactScope; artifact: ConnectedArtifact | null }
   | null;
@@ -78,7 +75,7 @@ function ArtifactIcon({ artifact }: { artifact: ConnectedArtifact }) {
   return <span className={"pm-format-icon " + format}><FileText aria-hidden="true" /><small>{format === "pdf" ? "PDF" : "DOC"}</small></span>;
 }
 
-function MemoryDialog({ title, eyebrow, children, onClose }: { title: string; eyebrow: string; children: React.ReactNode; onClose: () => void }) {
+function MemoryDialog({ title, eyebrow, children, onClose, className = "" }: { title: string; eyebrow: string; children: React.ReactNode; onClose: () => void; className?: string }) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -88,14 +85,14 @@ function MemoryDialog({ title, eyebrow, children, onClose }: { title: string; ey
   }, [onClose]);
 
   return <div className="pm-dialog-backdrop" role="presentation" onPointerDown={onClose}>
-    <section className="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pm-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
+    <section className={`pm-dialog ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby="pm-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
       <header><div><span>{eyebrow}</span><h2 id="pm-dialog-title">{title}</h2></div><button type="button" onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button></header>
       {children}
     </section>
   </div>;
 }
 
-export function StudySetupPage({ language, project, isDraft = false, t, onLanguageChange, onProjectChange, onContinue, onHome, onTeams, onManageTeam }: Props) {
+export function StudySetupPage({ language, project, isDraft = false, t, onLanguageChange, onProjectChange, onContinue, onHome, onTeams }: Props) {
   const auth = useAuth();
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -104,6 +101,7 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [programSyncing, setProgramSyncing] = useState(false);
 
   const c = useMemo(() => language === "pt" ? {
     back: "Início",
@@ -125,6 +123,9 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
     modality: "Modalidade",
     category: "Categoria",
     officialDocs: "Documentos oficiais",
+    officialSource: "Fonte oficial OBSAT · somente leitura",
+    importingProgram: "Importando regras, categoria e próximo marco da OBSAT...",
+    importedProgram: "Contexto oficial da OBSAT sincronizado.",
     milestone: "Próximo marco",
     deadline: "Prazo oficial",
     team: "EQUIPE DO PROJETO",
@@ -217,6 +218,9 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
     modality: "Modality",
     category: "Category",
     officialDocs: "Official documents",
+    officialSource: "Official OBSAT source · read only",
+    importingProgram: "Importing OBSAT rules, category, and next milestone...",
+    importedProgram: "Official OBSAT context synchronized.",
     milestone: "Next milestone",
     deadline: "Official deadline",
     team: "PROJECT TEAM",
@@ -316,7 +320,6 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
   const category = programCategory(modality, project.context.categoryId);
   const associatedTeams = teams.filter((team) => team.membership === "member" || team.memberIds.includes(auth.user?.memberId || ""));
   const selectedTeam = associatedTeams.find((team) => team.id === project.context.teamId) ?? null;
-  const selectedTeamMembers = useMemo(() => selectedTeam ? selectedTeam.memberIds.map((id) => members.find((member) => member.id === id)).filter((member): member is TeamMember => Boolean(member)) : [], [members, selectedTeam]);
   const selectedProjectMembers = useMemo(() => project.context.assignments.map((assignment) => {
     const member = members.find((item) => item.id === assignment.memberId);
     return member ? { member, assignment } : null;
@@ -364,49 +367,14 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
     updateProject({}, { configured: false, teamId: team.id, teamName: team.name, teamArtifactIds: [...team.artifactIds], assignments });
   }
 
-  function toggleMember(memberId: string) {
-    const existing = project.context.assignments.find((assignment) => assignment.memberId === memberId);
-    const assignments = existing
-      ? project.context.assignments.filter((assignment) => assignment.memberId !== memberId)
-      : [...project.context.assignments, { memberId, roleId: project.context.assignments.some((assignment) => assignment.roleId === "captain") ? "member" : "captain", sectorId: "" }];
-    updateProject({}, { configured: false, assignments });
-  }
-
-  function updateAssignment(memberId: string, patch: Partial<ProjectMemberAssignment>) {
-    updateProject({}, { assignments: project.context.assignments.map((assignment) => assignment.memberId === memberId ? { ...assignment, ...patch } : assignment) });
-  }
-
-  function addStructureItem(kind: "roles" | "sectors") {
-    const item = { id: kind.slice(0, -1) + "-" + crypto.randomUUID(), name: kind === "roles" ? c.newRole : c.newSector };
-    updateProject({}, { [kind]: [...project.context[kind], item] });
-  }
-
-  function renameStructureItem(kind: "roles" | "sectors", id: string, name: string) {
-    updateProject({}, { [kind]: project.context[kind].map((item) => item.id === id ? { ...item, name } : item) });
-  }
-
-  function removeStructureItem(kind: "roles" | "sectors", id: string) {
-    if (kind === "roles" && project.context.assignments.some((assignment) => assignment.roleId === id)) return;
-    if (kind === "roles") {
-      updateProject({}, { roles: project.context.roles.filter((item) => item.id !== id) });
-      return;
-    }
-    updateProject({}, {
-      sectors: project.context.sectors.filter((item) => item.id !== id),
-      assignments: project.context.assignments.map((assignment) => assignment.sectorId === id ? { ...assignment, sectorId: "" } : assignment)
-    });
-  }
-
   function toggleTeamArtifact(artifactId: string) {
     const linked = project.context.teamArtifactIds.includes(artifactId);
     updateProject({}, { teamArtifactIds: linked ? project.context.teamArtifactIds.filter((id) => id !== artifactId) : [...project.context.teamArtifactIds, artifactId] });
     if (linked) setFeedback(c.unlinked);
   }
 
-  async function addMember(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedTeam) return;
-    const data = new FormData(event.currentTarget);
+  async function createMember(name: string, email: string): Promise<TeamMember> {
+    if (!selectedTeam) throw new Error(c.noTeam);
     setBusy(true);
     setFeedback("");
     try {
@@ -414,8 +382,8 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
         method: "POST",
         body: JSON.stringify({
           teamId: selectedTeam.id,
-          displayName: String(data.get("name") || ""),
-          email: String(data.get("email") || ""),
+          displayName: name,
+          email,
           missionRole: "member",
           primaryArea: "systems",
           secondaryAreas: [],
@@ -427,15 +395,29 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
           notes: ""
         })
       });
-      updateProject({}, { assignments: [...project.context.assignments, { memberId: response.member.id, roleId: "member", sectorId: "" }] });
-      setDialog({ type: "team" });
       await loadMemory();
       setFeedback(c.saved);
+      return response.member;
     } catch (reason) {
       setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
     } finally {
       setBusy(false);
     }
+    throw new Error(c.loadError);
+  }
+
+  async function renameMember(memberId: string, name: string) {
+    await auth.api(`/team/members/${memberId}`, { method: "PATCH", body: JSON.stringify({ displayName: name }) });
+    await loadMemory();
+  }
+
+  function finishProgramSetup() {
+    setDialog(null);
+    setProgramSyncing(true);
+    window.setTimeout(() => {
+      setProgramSyncing(false);
+      setFeedback(c.importedProgram);
+    }, 1100);
   }
 
   async function saveArtifact(event: React.FormEvent<HTMLFormElement>) {
@@ -573,9 +555,10 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
             <button className="pm-details-button" type="button" onClick={() => setDialog({ type: "program" })}>{c.programDetails}<ChevronRight aria-hidden="true" /></button>
           </>}
         </section>
+        {programSyncing && <div className="pm-program-import" role="status"><span><LoaderCircle className="pm-spin" aria-hidden="true" /></span><div><strong>{c.importingProgram}</strong><i /></div></div>}
 
         <section className="pm-band pm-team-band">
-          <header><div><h2>{c.team}</h2><p>{c.teamHint}</p></div><div className="pm-band-actions"><button type="button" onClick={() => setDialog({ type: "new-member" })} disabled={!selectedTeam}><UserPlus aria-hidden="true" />{c.addMember}</button><button type="button" onClick={() => setDialog({ type: "team" })}><Settings2 aria-hidden="true" />{c.configureTeam}</button></div></header>
+          <header><div><h2>{c.team}</h2><p>{c.teamHint}</p></div><div className="pm-band-actions"><button type="button" onClick={() => setDialog({ type: "team" })}><Settings2 aria-hidden="true" />{c.configureTeam}</button></div></header>
           <div className="pm-horizontal-track">
             {loading && <div className="pm-loading"><LoaderCircle aria-hidden="true" />{c.loading}</div>}
             {!loading && !selectedTeam && <button className="pm-track-empty" type="button" onClick={() => setDialog({ type: "team" })}><UsersRound aria-hidden="true" /><span><strong>{c.teamEmptyTitle}</strong><small>{c.teamEmptyHint}</small></span><ChevronRight aria-hidden="true" /></button>}
@@ -623,33 +606,18 @@ export function StudySetupPage({ language, project, isDraft = false, t, onLangua
       {program && <div className="pm-program-detail">
         <div className="pm-program-detail-heading"><div className="pm-program-logo">{program.logoSrc ? <img src={program.logoSrc} alt={program.shortName} /> : <BookOpenCheck aria-hidden="true" />}</div><div><strong>{program.name[language]}</strong><p>{program.description[language]}</p></div></div>
         <div className="pm-program-controls"><label><span>{c.modality}</span><select value={project.context.modalityId || ""} onChange={(event) => selectModality(event.target.value)}>{program.modalities.map((item) => <option value={item.id} key={item.id}>{item.label[language]}</option>)}</select></label><label><span>{c.category}</span><select value={project.context.categoryId || ""} disabled={!modality} onChange={(event) => updateProject({}, { configured: false, categoryId: event.target.value })}>{modality?.categories.map((item) => <option value={item.id} key={item.id}>{item.label[language]}</option>)}</select></label></div>
-        {modality && <div className="pm-official-library"><h3>{c.officialDocs}</h3><div>{modality.officialDocuments.map((document) => <a href={document.url} target="_blank" rel="noreferrer" key={document.id}><BookOpenCheck aria-hidden="true" /><span><small>{document.format.toUpperCase()}</small><strong>{document.label[language]}</strong></span><ExternalLink aria-hidden="true" /></a>)}<a href={modality.milestone.url} target="_blank" rel="noreferrer"><CalendarDays aria-hidden="true" /><span><small>{c.milestone}</small><strong>{modality.milestone.date} · {modality.milestone.label[language]}</strong></span><ExternalLink aria-hidden="true" /></a></div></div>}
+        {modality && <div className="pm-official-library"><h3>{c.officialDocs}<span>{c.officialSource}</span></h3><div>{modality.officialDocuments.map((document) => <a href={document.url} target="_blank" rel="noreferrer" key={document.id}><BookOpenCheck aria-hidden="true" /><span><small>{document.format.toUpperCase()}</small><strong>{document.label[language]}</strong></span><ExternalLink aria-hidden="true" /></a>)}<a href={modality.milestone.url} target="_blank" rel="noreferrer"><CalendarDays aria-hidden="true" /><span><small>{c.milestone}</small><strong>{modality.milestone.date} · {modality.milestone.label[language]}</strong></span><ExternalLink aria-hidden="true" /></a></div></div>}
       </div>}
-      <footer><button className="primary" type="button" onClick={() => setDialog(null)}><Check aria-hidden="true" />{c.save}</button></footer>
+      <footer><button className="primary" type="button" onClick={finishProgramSetup}><Check aria-hidden="true" />{c.save}</button></footer>
     </MemoryDialog>}
 
-    {dialog?.type === "team" && <MemoryDialog eyebrow={c.team} title={c.configureTeam} onClose={() => setDialog(null)}>
-      <div className="pm-dialog-copy">{c.memberDialogHint}</div>
+    {dialog?.type === "team" && <MemoryDialog className="pm-team-config-dialog" eyebrow={c.team} title={c.configureTeam} onClose={() => setDialog(null)}>
       <div className="pm-team-config">
         <label className="pm-dialog-field"><span>{c.team}</span><select value={project.context.teamId || ""} onChange={(event) => selectTeam(event.target.value)}><option value="">{associatedTeams.length ? c.chooseTeam : c.noTeam}</option>{associatedTeams.map((team) => <option value={team.id} key={team.id}>{team.name}</option>)}</select></label>
         {!selectedTeam && <button className="pm-dialog-empty" type="button" onClick={() => { setDialog(null); onTeams(); }}><UsersRound aria-hidden="true" /><span><strong>{c.noTeam}</strong><small>{c.teamsArea}</small></span></button>}
-        {selectedTeam && <>
-          <div className="pm-team-config-actions"><button type="button" onClick={() => { setDialog(null); onManageTeam(); }}><GitFork aria-hidden="true" />{c.viewTeam}</button><button type="button" onClick={() => setDialog({ type: "structure" })}><Settings2 aria-hidden="true" />{c.projectStructure}</button><button type="button" onClick={() => setDialog({ type: "new-member" })}><UserPlus aria-hidden="true" />{c.addMember}</button></div>
-          <div className="pm-team-member-list">{selectedTeamMembers.map((member) => {
-            const assignment = project.context.assignments.find((item) => item.memberId === member.id);
-            return <article className={assignment ? "selected" : ""} key={member.id}>
-              <label className="pm-member-toggle"><input type="checkbox" checked={Boolean(assignment)} onChange={() => toggleMember(member.id)} /><span className={member.avatarUrl ? "pm-member-avatar has-photo" : "pm-member-avatar"}>{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : memberInitials(member.displayName)}</span><span><strong>{member.displayName}</strong><small>{member.course || member.email}</small></span><span className="pm-check"><Check aria-hidden="true" /></span></label>
-              {assignment && <div className="pm-assignment-controls"><label><span>{c.role}</span><select value={assignment.roleId} onChange={(event) => updateAssignment(member.id, { roleId: event.target.value })}>{project.context.roles.map((role) => <option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label><span>{c.sector}</span><select value={assignment.sectorId} onChange={(event) => updateAssignment(member.id, { sectorId: event.target.value })}><option value="">{c.noSector}</option>{project.context.sectors.map((sector) => <option value={sector.id} key={sector.id}>{sector.name}</option>)}</select></label></div>}
-            </article>;
-          })}</div>
-        </>}
+        {selectedTeam && <ProjectTeamConfigurator key={selectedTeam.id} language={language} context={project.context} team={selectedTeam} members={members} onCreateMember={createMember} onRenameMember={renameMember} onClose={() => setDialog(null)} onSave={(patch) => { updateProject({}, { ...patch, configured: false }); setDialog(null); setFeedback(c.saved); }} />}
       </div>
-      <footer><button className="primary" type="button" onClick={() => setDialog(null)}><Check aria-hidden="true" />{c.save}</button></footer>
     </MemoryDialog>}
-
-    {dialog?.type === "new-member" && <MemoryDialog eyebrow={c.team} title={c.inviteTitle} onClose={() => setDialog({ type: "team" })}><form className="pm-dialog-form" onSubmit={(event) => void addMember(event)}><label><span>{c.personName}</span><input name="name" required maxLength={100} autoFocus /></label><label><span>{c.personEmail}</span><input name="email" type="email" required maxLength={254} /></label><p>{c.inviteHint}</p><footer><button type="button" onClick={() => setDialog({ type: "team" })}>{c.cancel}</button><button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : <UserPlus aria-hidden="true" />}{c.addMember}</button></footer></form></MemoryDialog>}
-
-    {dialog?.type === "structure" && <MemoryDialog eyebrow={c.team} title={c.structureTitle} onClose={() => setDialog({ type: "team" })}><div className="pm-dialog-copy">{c.structureHint}</div><div className="pm-structure-editor"><section><header><h3>{c.roles}</h3><button type="button" onClick={() => addStructureItem("roles")}><Plus aria-hidden="true" />{c.addRole}</button></header><div>{project.context.roles.map((role) => { const inUse = project.context.assignments.some((assignment) => assignment.roleId === role.id); return <label key={role.id}><input value={role.name} maxLength={60} onChange={(event) => renameStructureItem("roles", role.id, event.target.value)} /><button type="button" disabled={inUse || project.context.roles.length === 1} title={inUse ? c.roleInUse : c.remove} onClick={() => removeStructureItem("roles", role.id)}><Trash2 aria-hidden="true" /></button></label>; })}</div></section><section><header><h3>{c.sectors}</h3><button type="button" onClick={() => addStructureItem("sectors")}><Plus aria-hidden="true" />{c.addSector}</button></header><div>{project.context.sectors.map((sector) => <label key={sector.id}><input value={sector.name} maxLength={60} onChange={(event) => renameStructureItem("sectors", sector.id, event.target.value)} /><button type="button" title={c.remove} onClick={() => removeStructureItem("sectors", sector.id)}><Trash2 aria-hidden="true" /></button></label>)}{project.context.sectors.length === 0 && <div className="pm-artifact-empty">{c.noSector}</div>}</div></section></div><footer><button className="primary" type="button" onClick={() => setDialog({ type: "team" })}><Check aria-hidden="true" />{c.save}</button></footer></MemoryDialog>}
 
     {dialog?.type === "team-artifacts" && <MemoryDialog eyebrow={c.teamArtifacts} title={c.teamLibrary} onClose={() => setDialog(null)}><div className="pm-dialog-copy">{c.teamLibraryHint}</div><div className="pm-selection-list artifacts">{availableTeamArtifacts.map((artifact) => { const checked = project.context.teamArtifactIds.includes(artifact.id); return <label key={artifact.id}><input type="checkbox" checked={checked} onChange={() => toggleTeamArtifact(artifact.id)} /><ArtifactIcon artifact={artifact} /><span><strong>{artifact.label}</strong><small>{artifact.description || artifact.url}</small></span><Check aria-hidden="true" /></label>; })}{availableTeamArtifacts.length === 0 && <div className="pm-artifact-empty">{c.noArtifacts}</div>}</div><footer><button type="button" onClick={() => setDialog({ type: "artifact", scope: "team", artifact: null })}><Plus aria-hidden="true" />{c.addArtifact}</button><button className="primary" type="button" onClick={() => setDialog(null)}><Check aria-hidden="true" />{c.save}</button></footer></MemoryDialog>}
 
