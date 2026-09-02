@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildVirtualProjectFiles, createBoardFromSetup, createEmptyProject, loadProject, saveProject, strongestStateForNodeIds } from "../src/lib/projectStore";
+import { buildVirtualProjectFiles, createBoardFromSetup, createEmptyProject, loadProject, normalizeProject, saveProject, strongestStateForNodeIds } from "../src/lib/projectStore";
+import { programModality, referenceProgram } from "../src/lib/programs";
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -17,8 +18,31 @@ describe("mission project model", () => {
   it("creates a versioned exportable project", () => {
     const project = createEmptyProject("en");
     expect(project.schemaVersion).toBe(2);
+    expect(project.context.configured).toBe(false);
+    expect(project.name).toBe("");
+    expect(buildVirtualProjectFiles(project).map((file) => file.path)).toContain("/config/context.json");
     expect(buildVirtualProjectFiles(project).map((file) => file.path)).toContain("/config/progress.json");
     expect(buildVirtualProjectFiles(project).map((file) => file.path)).toContain("/studies/inconsistencies.json");
+  });
+
+  it("upgrades an existing project with the new context without changing its board", () => {
+    const legacy = createEmptyProject("pt");
+    const board = createBoardFromSetup(legacy, "pt");
+    Reflect.deleteProperty(legacy, "context");
+    legacy.board = board;
+    const normalized = normalizeProject(legacy, "pt");
+    expect(normalized.context.configured).toBe(false);
+    expect(normalized.context.roles.map((role) => role.id)).toContain("captain");
+    expect(normalized.board).toEqual(board);
+  });
+
+  it("exposes OBSAT modalities and the university N3 category", () => {
+    const obsat = referenceProgram("obsat");
+    const practical = programModality(obsat, "practical");
+    expect(obsat?.available).toBe(true);
+    expect(obsat?.modalities.map((modality) => modality.id)).toEqual(["practical", "theoretical"]);
+    expect(practical?.categories.some((category) => category.id === "n3")).toBe(true);
+    expect(practical?.officialDocuments.length).toBeGreaterThanOrEqual(2);
   });
 
   it("seeds a problem study without selecting spacecraft hardware", () => {

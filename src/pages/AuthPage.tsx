@@ -3,7 +3,6 @@ import { KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck } from "lucid
 import { LanguageToggle } from "../components/LanguageToggle";
 import { ApiError, useAuth } from "../lib/auth";
 import { getStoredLanguage, setStoredLanguage } from "../lib/i18n";
-import { TEAM_AREAS } from "../lib/team";
 import type { Language } from "../lib/types";
 
 type Mode = "login" | "register";
@@ -16,8 +15,10 @@ export function AuthPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setMode(auth.hasOwner ? "login" : "register");
+    setMode(window.location.hash.startsWith("#/join?") ? "register" : auth.hasOwner ? "login" : "register");
   }, [auth.hasOwner]);
+
+  const joinParameters = new URLSearchParams(window.location.hash.split("?")[1] || "");
 
   const c = language === "pt" ? {
     brandLine: "ENGENHARIA DE MISSÃO COLABORATIVA",
@@ -28,12 +29,9 @@ export function AuthPage() {
     email: "E-mail",
     password: "Senha",
     passwordHint: "Use uma frase com pelo menos 15 caracteres.",
-    institution: "Instituição",
+    institution: "Universidade",
     course: "Curso",
-    stage: "Período ou etapa",
-    area: "Área principal",
-    skills: "Competências",
-    skillsHint: "Separe por vírgulas",
+    stage: "Semestre",
     availability: "Horas por semana",
     inviteCode: "Código de convite",
     inviteHint: "Use o código enviado pela liderança da equipe.",
@@ -54,12 +52,9 @@ export function AuthPage() {
     email: "Email",
     password: "Password",
     passwordHint: "Use a passphrase with at least 15 characters.",
-    institution: "Institution",
+    institution: "University",
     course: "Degree or course",
-    stage: "Academic stage",
-    area: "Primary area",
-    skills: "Skills",
-    skillsHint: "Separate with commas",
+    stage: "Semester",
     availability: "Hours per week",
     inviteCode: "Invitation code",
     inviteHint: "Use the code shared by the team leadership.",
@@ -95,8 +90,6 @@ export function AuthPage() {
           institution: String(data.get("institution") || ""),
           course: String(data.get("course") || ""),
           academicStage: String(data.get("academicStage") || ""),
-          primaryArea: String(data.get("primaryArea") || "systems") as (typeof TEAM_AREAS)[number]["id"],
-          skills: String(data.get("skills") || "").split(",").map((item) => item.trim()).filter(Boolean),
           availabilityHours: Number(data.get("availabilityHours") || 0),
           inviteCode: String(data.get("inviteCode") || "")
         });
@@ -147,15 +140,13 @@ export function AuthPage() {
 
           <div className="auth-fields">
             {mode === "register" && <label><span>{c.name}</span><input name="name" autoComplete="name" required minLength={2} maxLength={100} /></label>}
-            <label><span>{c.email}</span><input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
+            <label><span>{c.email}</span><input name="email" type="email" autoComplete="email" required maxLength={254} defaultValue={mode === "register" ? joinParameters.get("email") || "" : ""} /></label>
             <label className={mode === "login" ? "auth-field-wide" : ""}><span>{c.password}</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "login" ? 1 : 15} maxLength={128} /><small>{mode === "register" ? c.passwordHint : ""}</small></label>
             {mode === "register" && <label><span>{c.institution}</span><input name="institution" autoComplete="organization" required maxLength={160} /></label>}
             {mode === "register" && <label><span>{c.course}</span><input name="course" maxLength={120} /></label>}
             {mode === "register" && <label><span>{c.stage}</span><input name="academicStage" maxLength={80} placeholder={language === "pt" ? "Ex. 6º período" : "E.g. 3rd year"} /></label>}
-            {mode === "register" && <label><span>{c.area}</span><select name="primaryArea" defaultValue="systems">{TEAM_AREAS.map((area) => <option key={area.id} value={area.id}>{area[language]}</option>)}</select></label>}
-            {mode === "register" && <label><span>{c.skills}</span><input name="skills" maxLength={500} placeholder={c.skillsHint} /></label>}
             {mode === "register" && <label><span>{c.availability}</span><input name="availabilityHours" type="number" min={0} max={80} defaultValue={8} /></label>}
-            {mode === "register" && auth.hasOwner && <label className="auth-field-wide"><span>{c.inviteCode}</span><input name="inviteCode" required maxLength={80} autoComplete="one-time-code" /><small>{c.inviteHint}</small></label>}
+            {mode === "register" && auth.hasOwner && <label className="auth-field-wide"><span>{c.inviteCode}</span><input name="inviteCode" required maxLength={80} autoComplete="one-time-code" defaultValue={joinParameters.get("code") || ""} /><small>{c.inviteHint}</small></label>}
           </div>
 
           {error && <div className="auth-error" role="alert">{error}</div>}

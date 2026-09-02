@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MissionSidebar } from "./components/MissionSidebar";
 import { HomePage } from "./pages/HomePage";
+import { ProjectSetupPage } from "./pages/ProjectSetupPage";
 import { StudySetupPage } from "./pages/StudySetupPage";
+import { TeamPage } from "./pages/TeamPage";
 import { BrainstormPage } from "./pages/BrainstormPage";
 import { useAuth } from "./lib/auth";
 import { getStoredLanguage, resolveText, setStoredLanguage } from "./lib/i18n";
-import { loadProject, prepareProjectForConception, saveProject } from "./lib/projectStore";
+import { loadProject, normalizeProject, prepareProjectForConception, saveProject } from "./lib/projectStore";
 import type { MissionProject } from "./lib/projectStore";
 import type { Language } from "./lib/types";
 import "./mission-sidebar.css";
 
-type Route = "home" | "setup" | "brainstorm";
+type Route = "home" | "projectSetup" | "setup" | "team" | "brainstorm";
 
 function getRoute(): Route {
   if (window.location.hash === "#/brainstorming") return "brainstorm";
+  if (window.location.hash === "#/project-setup") return "projectSetup";
   if (window.location.hash === "#/study-setup") return "setup";
+  if (window.location.hash === "#/team") return "team";
   return "home";
 }
 
@@ -53,8 +57,9 @@ export function App() {
       .then(async ({ project: remoteProject }) => {
         if (cancelled) return;
         if (remoteProject?.schemaVersion === 2) {
-          projectRef.current = remoteProject;
-          setProject(saveProject(remoteProject));
+          const normalized = normalizeProject(remoteProject, language);
+          projectRef.current = normalized;
+          setProject(saveProject(normalized));
         } else {
           await auth.api("/workspace/project", { method: "PUT", body: JSON.stringify(projectRef.current) });
         }
@@ -109,7 +114,7 @@ export function App() {
   }, [route]);
 
   const t = useMemo(() => (path: string) => resolveText(language, path), [language]);
-  const currentStep = route === "setup" ? 0 : route === "brainstorm" ? 1 : null;
+  const currentStep = ["projectSetup", "setup"].includes(route) ? 0 : route === "brainstorm" ? 1 : null;
 
   function changeLanguage(nextLanguage: Language) {
     setLanguage(nextLanguage);
@@ -118,7 +123,19 @@ export function App() {
   }
 
   function openSetup() {
+    window.location.hash = projectRef.current.context.configured ? "#/study-setup" : "#/project-setup";
+  }
+
+  function openProjectSetup() {
+    window.location.hash = "#/project-setup";
+  }
+
+  function openMemory() {
     window.location.hash = "#/study-setup";
+  }
+
+  function openTeam() {
+    window.location.hash = "#/team";
   }
 
   function openBrainstorm() {
@@ -136,13 +153,15 @@ export function App() {
     if (step === 1) openBrainstorm();
   }
 
-  let page = <HomePage language={language} t={t} onLanguageChange={changeLanguage} onOpenBrainstorm={openSetup} />;
-  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openBrainstorm} onHome={openHome} />;
+  let page = <HomePage language={language} t={t} onLanguageChange={changeLanguage} onOpenBrainstorm={openProjectSetup} />;
+  if (route === "projectSetup") page = <ProjectSetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openMemory} onHome={openHome} onManageTeam={openTeam} />;
+  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openBrainstorm} onHome={openHome} onEditProject={openProjectSetup} onManageTeam={openTeam} />;
+  if (route === "team") page = <TeamPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onBack={project.context.configured ? openMemory : openProjectSetup} onProjectSetup={openProjectSetup} />;
   if (route === "brainstorm") page = <BrainstormPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onHome={openHome} onBackSetup={openSetup} />;
 
   return (
     <div className={sidebarExpanded ? `app-shell route-${route} sidebar-expanded` : `app-shell route-${route}`}>
-      <MissionSidebar language={language} currentStep={currentStep} expanded={sidebarExpanded} connectedLabel={t("common.connected")} homeLabel={t("home.start")} onToggle={() => setSidebarExpanded((current) => !current)} onHome={openHome} onStepSelect={openPipelineStep} />
+      <MissionSidebar language={language} currentStep={currentStep} expanded={sidebarExpanded} connectedLabel={t("common.connected")} homeLabel={t("home.start")} teamLabel={language === "pt" ? "Equipe" : "Team"} homeActive={route === "home"} teamActive={route === "team"} onToggle={() => setSidebarExpanded((current) => !current)} onHome={openHome} onTeam={openTeam} onStepSelect={openPipelineStep} />
       <div className="app-page">{page}</div>
     </div>
   );

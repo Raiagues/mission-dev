@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { DEMO_USER, demoApi } from "./demoApi";
-import type { SessionUser, TeamAreaId } from "./team";
+import type { SessionUser } from "./team";
 
 const STATIC_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
 const API_ORIGIN = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/u, "");
@@ -12,8 +12,6 @@ export type RegisterAccountInput = {
   institution: string;
   course: string;
   academicStage: string;
-  primaryArea: TeamAreaId;
-  skills: string[];
   availabilityHours: number;
   inviteCode?: string;
 };

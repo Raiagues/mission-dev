@@ -125,6 +125,10 @@
   white-space: nowrap;
 }
 
+.mission-sidebar-team {
+  margin-top: -4px;
+}
+
 .mission-sidebar-home:hover,
 .mission-sidebar-home.active {
   color: #f2f8ff;

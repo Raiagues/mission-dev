@@ -71,6 +71,16 @@ test("first registration creates an owner session and protects mutations", async
   });
   assert.equal(accepted.statusCode, 201);
 
+  const emailOnlyInvitation = await app.inject({
+    method: "POST",
+    url: "/api/team/members",
+    headers: { cookie, "x-csrf-token": registration.json().csrfToken },
+    payload: { email: "convite@example.edu.br" }
+  });
+  assert.equal(emailOnlyInvitation.statusCode, 201);
+  assert.equal(emailOnlyInvitation.json().member.email, "convite@example.edu.br");
+  assert.equal(emailOnlyInvitation.json().member.missionRole, "member");
+
   const persisted = await readFile(storeFile, "utf8");
   assert.doesNotMatch(persisted, /uma frase longa para a missao/);
   assert.match(persisted, /\$argon2id\$/);
@@ -133,6 +143,38 @@ test("later registrations receive member access and invalid credentials are reje
     }
   });
   assert.equal(memberCannotInvite.statusCode, 403);
+
+  const projectWithMemberCaptain = {
+    schemaVersion: 2,
+    id: "project-role-permissions",
+    context: {
+      assignments: [{ memberId: second.json().user.memberId, roleId: "captain", sectorId: "" }]
+    },
+    board: { nodes: [], links: [] }
+  };
+  const memberCannotPromoteSelf = await app.inject({
+    method: "PUT",
+    url: "/api/workspace/project",
+    headers: { cookie: secondCookie, "x-csrf-token": second.json().csrfToken },
+    payload: projectWithMemberCaptain
+  });
+  assert.equal(memberCannotPromoteSelf.statusCode, 403);
+
+  const savedProject = await app.inject({
+    method: "PUT",
+    url: "/api/workspace/project",
+    headers: { cookie: cookieFrom(owner), "x-csrf-token": owner.json().csrfToken },
+    payload: projectWithMemberCaptain
+  });
+  assert.equal(savedProject.statusCode, 200);
+
+  const projectCaptainCanInvite = await app.inject({
+    method: "POST",
+    url: "/api/team/members",
+    headers: { cookie: secondCookie, "x-csrf-token": second.json().csrfToken },
+    payload: { email: "project-invite@example.edu.br" }
+  });
+  assert.equal(projectCaptainCanInvite.statusCode, 201);
 
   const unsafeArtifact = await app.inject({
     method: "POST",

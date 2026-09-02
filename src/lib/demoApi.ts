@@ -12,8 +12,8 @@ type DemoState = {
 export const DEMO_USER: SessionUser = {
   id: "pages-demo-owner",
   memberId: "pages-demo-captain",
-  name: "Equipe de demonstração",
-  initials: "ED",
+  name: "Emilly Ribeiro",
+  initials: "ER",
   email: "demo@norte.invalid",
   accessRole: "owner_admin",
   institution: "Ambiente local do navegador",
@@ -46,56 +46,14 @@ function initialState(): DemoState {
         skills: ["engenharia de sistemas", "requisitos"],
         availabilityHours: 10,
         notes: "Perfil demonstrativo.",
-        accountStatus: "demo",
+        accountStatus: "active",
         accessRole: "owner_admin",
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        id: "pages-demo-manager",
-        accountId: null,
-        displayName: "Lucas Menezes",
-        email: "lucas@exemplo.invalid",
-        missionRole: "manager",
-        primaryArea: "obc_avionics",
-        secondaryAreas: ["flight_software", "ait_testing"],
-        institution: "Universidade Federal de Exemplo",
-        course: "Engenharia de Computação",
-        academicStage: "6º período",
-        skills: ["C++", "sistemas embarcados", "telemetria"],
-        availabilityHours: 8,
-        notes: "Perfil demonstrativo.",
-        accountStatus: "demo",
-        accessRole: null,
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        id: "pages-demo-structures",
-        accountId: null,
-        displayName: "Bianca Souza",
-        email: "bianca@exemplo.invalid",
-        missionRole: "manager",
-        primaryArea: "structures_thermal",
-        secondaryAreas: ["ait_testing"],
-        institution: "Universidade Federal de Exemplo",
-        course: "Engenharia Mecânica",
-        academicStage: "8º período",
-        skills: ["CAD", "análise estrutural", "ensaios ambientais"],
-        availabilityHours: 8,
-        notes: "Perfil demonstrativo.",
-        accountStatus: "demo",
-        accessRole: null,
         createdAt: now,
         updatedAt: now
       }
     ],
     artifacts: [
-      { id: "pages-obsat-rules", kind: "official", label: "Edital oficial · Modalidade Prática", url: "https://wiki.obsat.org.br/books/modalidade-pratica", description: "Regulamento vivo da 3ª OBSAT MCTI.", tags: ["OBSAT", "oficial"], official: true, createdBy: null, connectedAt: now, updatedAt: now },
-      { id: "pages-obsat-schedule", kind: "official", label: "Cronograma oficial OBSAT", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma", description: "Fases, entregas e datas da modalidade prática.", tags: ["OBSAT", "cronograma"], official: true, createdBy: null, connectedAt: now, updatedAt: now },
-      { id: "pages-report", kind: "document", label: "Relatório final · Missão Aurora", url: "artifacts/relatorio-final-missao-aurora.md", description: "Relatório demonstrativo de uma missão anterior.", tags: ["mock", "relatório"], official: false, createdBy: DEMO_USER.id, connectedAt: now, updatedAt: now },
-      { id: "pages-lessons", kind: "dataset", label: "Lições aprendidas · Aurora", url: "artifacts/licoes-aprendidas-missao-aurora.csv", description: "Registro demonstrativo de decisões e ações corretivas.", tags: ["mock", "CSV"], official: false, createdBy: DEMO_USER.id, connectedAt: now, updatedAt: now },
-      { id: "pages-arduino", kind: "repository", label: "aurora/telemetria-arduino", url: "artifacts/arduino/README.md", description: "Exemplo local de telemetria para CanSat.", tags: ["mock", "Arduino"], official: false, createdBy: DEMO_USER.id, connectedAt: now, updatedAt: now }
+      { id: "norte-aurora-telemetry", kind: "repository", label: "norte-aurora-telemetria", url: "https://github.com/Raiagues/norte-aurora-telemetria", description: "Repositório GitHub de demonstração conectado à equipe.", tags: [], official: false, createdBy: DEMO_USER.id, connectedAt: now, updatedAt: now }
     ],
     project: null,
     labs: {}
@@ -105,7 +63,16 @@ function initialState(): DemoState {
 function readState(): DemoState {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") as DemoState | null;
-    if (parsed && Array.isArray(parsed.members) && Array.isArray(parsed.artifacts)) return parsed;
+    if (parsed && Array.isArray(parsed.members) && Array.isArray(parsed.artifacts)) {
+      parsed.members = parsed.members.filter((member) => member.accountStatus !== "demo" || Boolean(member.accountId)).map((member) => member.accountId && member.accountStatus === "demo" ? { ...member, accountStatus: "active" } : member);
+      const retiredLabels = new Set(["Relatório final · Missão Aurora", "Lições aprendidas · Aurora", "aurora/telemetria-arduino"]);
+      parsed.artifacts = parsed.artifacts.filter((artifact) => !artifact.official && !retiredLabels.has(artifact.label));
+      if (!parsed.artifacts.some((artifact) => artifact.id === "norte-aurora-telemetry")) {
+        parsed.artifacts.push(initialState().artifacts[0]);
+      }
+      writeState(parsed);
+      return parsed;
+    }
   } catch {
     // A fresh demo is safer than keeping malformed browser data.
   }
@@ -148,7 +115,25 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
 
   if (path === "/team/members" && method === "POST") {
     const now = timestamp();
-    const member = { ...body, id: id("member"), accountId: null, accountStatus: "invited", accessRole: null, createdAt: now, updatedAt: now } as TeamMember;
+    const member = {
+      id: id("member"),
+      accountId: null,
+      displayName: String(body.displayName || String(body.email || "").split("@")[0] || "New member"),
+      email: String(body.email || ""),
+      missionRole: "member",
+      primaryArea: "systems",
+      secondaryAreas: [],
+      institution: "",
+      course: "",
+      academicStage: "",
+      skills: [],
+      availabilityHours: 0,
+      notes: "",
+      accountStatus: "invited",
+      accessRole: null,
+      createdAt: now,
+      updatedAt: now
+    } satisfies TeamMember;
     state.members.push(member);
     writeState(state);
     return { member, invitationCode: `DEMO-${crypto.randomUUID().slice(0, 8).toUpperCase()}` } as T;

@@ -37,12 +37,35 @@ export type IssueStudy = {
   updatedAt: string;
 };
 
+export type ProjectStructureItem = {
+  id: string;
+  name: string;
+};
+
+export type ProjectMemberAssignment = {
+  memberId: string;
+  roleId: string;
+  sectorId: string;
+};
+
+export type ProjectContext = {
+  configured: boolean;
+  programId: string | null;
+  modalityId: string | null;
+  categoryId: string | null;
+  teamName: string;
+  roles: ProjectStructureItem[];
+  sectors: ProjectStructureItem[];
+  assignments: ProjectMemberAssignment[];
+};
+
 export type MissionProject = {
   schemaVersion: 2;
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
+  context: ProjectContext;
   setup: {
     intent: StudyIntent;
     statement: string;
@@ -74,6 +97,13 @@ export type VirtualProjectFile = {
 const STORAGE_KEY = "norte-project-v2";
 const LEGACY_STORAGE_KEY = "mission-dev-project-v2";
 
+const DEFAULT_ROLES: ProjectStructureItem[] = [
+  { id: "captain", name: "Capitão" },
+  { id: "manager", name: "Gerente" },
+  { id: "member", name: "Membro" },
+  { id: "advisor", name: "Orientador" }
+];
+
 function uid(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -88,9 +118,19 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
   return {
     schemaVersion: 2,
     id: uid("mission"),
-    name: language === "pt" ? "Nova missão" : "New mission",
+    name: "",
     createdAt: timestamp,
     updatedAt: timestamp,
+    context: {
+      configured: false,
+      programId: null,
+      modalityId: null,
+      categoryId: null,
+      teamName: "",
+      roles: DEFAULT_ROLES.map((role) => ({ ...role, name: language === "en" ? ({ captain: "Captain", manager: "Manager", member: "Member", advisor: "Advisor" }[role.id] ?? role.name) : role.name })),
+      sectors: [],
+      assignments: []
+    },
     setup: {
       intent: "problem",
       statement: "",
@@ -114,6 +154,22 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
   };
 }
 
+export function normalizeProject(project: MissionProject, language: Language = "pt"): MissionProject {
+  const defaults = createEmptyProject(language);
+  const context = project.context && typeof project.context === "object" ? project.context : defaults.context;
+  return {
+    ...defaults,
+    ...project,
+    context: {
+      ...defaults.context,
+      ...context,
+      roles: Array.isArray(context.roles) && context.roles.length > 0 ? context.roles : defaults.context.roles,
+      sectors: Array.isArray(context.sectors) ? context.sectors : [],
+      assignments: Array.isArray(context.assignments) ? context.assignments : []
+    }
+  };
+}
+
 export function loadProject(language: Language = "pt"): MissionProject {
   if (typeof window === "undefined") return createEmptyProject(language);
   const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -122,15 +178,16 @@ export function loadProject(language: Language = "pt"): MissionProject {
   try {
     const parsed = JSON.parse(raw) as MissionProject;
     if (parsed.schemaVersion !== 2) return createEmptyProject(language);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    return parsed;
+    const normalized = normalizeProject(parsed, language);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    return normalized;
   } catch {
     return createEmptyProject(language);
   }
 }
 
 export function saveProject(project: MissionProject): MissionProject {
-  const next = { ...project, updatedAt: now() };
+  const next = { ...normalizeProject(project), updatedAt: now() };
   if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   return next;
 }
@@ -200,6 +257,7 @@ export function prepareProjectForConception(project: MissionProject, language: L
 export function buildVirtualProjectFiles(project: MissionProject): VirtualProjectFile[] {
   return [
     { path: "/project.json", description: "Project identity and schema", content: { schemaVersion: project.schemaVersion, id: project.id, name: project.name, createdAt: project.createdAt, updatedAt: project.updatedAt } },
+    { path: "/config/context.json", description: "Reference program, modality, category and project team", content: project.context },
     { path: "/config/study.json", description: "Study intent, starting statement and references", content: project.setup },
     { path: "/config/progress.json", description: "Definition framework and custom criteria", content: project.progress },
     { path: "/boards/problem.json", description: "Problem conception graph", content: project.board },

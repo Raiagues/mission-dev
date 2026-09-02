@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
@@ -15,24 +16,7 @@ import { brainstormRequestSchema, createBrainstormAiService } from "./brainstorm
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 15;
 const ACCESS_ROLES = ["owner_admin", "captain", "manager", "member", "advisor"];
-const MISSION_ROLES = ["captain", "manager", "member", "advisor"];
 const MEMBER_STATUSES = ["demo", "invited", "active"];
-const AREA_IDS = [
-  "systems",
-  "mission_payload",
-  "project_management",
-  "structures_thermal",
-  "eps_power",
-  "obc_avionics",
-  "flight_software",
-  "communications_ground",
-  "adcs_gnc",
-  "ait_testing",
-  "operations_orbit",
-  "safety_regulatory",
-  "finance_procurement",
-  "outreach_documentation"
-];
 const ARTIFACT_KINDS = ["official", "document", "repository", "dataset", "link"];
 const COMMON_PASSWORDS = new Set([
   "123456789012345",
@@ -48,9 +32,9 @@ const stringList = (maxItems = 12, maxLength = 80) => ({ type: "array", maxItems
 const profileProperties = {
   displayName: string(100, 2),
   email: string(254, 3),
-  missionRole: { type: "string", enum: MISSION_ROLES },
-  primaryArea: { type: "string", enum: AREA_IDS },
-  secondaryAreas: { type: "array", maxItems: 6, items: { type: "string", enum: AREA_IDS }, uniqueItems: true },
+  missionRole: string(60),
+  primaryArea: string(80),
+  secondaryAreas: stringList(6, 80),
   institution: string(160, 2),
   course: string(120),
   academicStage: string(80),
@@ -63,7 +47,7 @@ const profileProperties = {
 const registerBody = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "email", "password", "institution", "primaryArea"],
+  required: ["name", "email", "password", "institution"],
   properties: {
     name: string(100, 2),
     email: string(254, 3),
@@ -71,7 +55,7 @@ const registerBody = {
     institution: string(160, 2),
     course: string(120),
     academicStage: string(80),
-    primaryArea: { type: "string", enum: AREA_IDS },
+    primaryArea: string(80),
     skills: stringList(16, 60),
     availabilityHours: { type: "integer", minimum: 0, maximum: 80 },
     inviteCode: string(80)
@@ -81,7 +65,7 @@ const registerBody = {
 const memberBody = {
   type: "object",
   additionalProperties: false,
-  required: ["displayName", "email", "missionRole", "primaryArea", "institution"],
+  required: ["email"],
   properties: profileProperties
 };
 
@@ -194,13 +178,14 @@ function httpError(statusCode, code, message) {
 }
 
 function cleanMemberInput(body) {
+  const email = normalizeEmail(body.email);
   return {
-    displayName: normalizeText(body.displayName),
-    email: normalizeEmail(body.email),
-    missionRole: body.missionRole,
-    primaryArea: body.primaryArea,
-    secondaryAreas: normalizeList(body.secondaryAreas).filter((area) => area !== body.primaryArea),
-    institution: normalizeText(body.institution),
+    displayName: normalizeText(body.displayName || email.split("@")[0] || "New member"),
+    email,
+    missionRole: body.missionRole || "member",
+    primaryArea: body.primaryArea || "systems",
+    secondaryAreas: normalizeList(body.secondaryAreas).filter((area) => area !== (body.primaryArea || "systems")),
+    institution: normalizeText(body.institution || ""),
     course: normalizeText(body.course || ""),
     academicStage: normalizeText(body.academicStage || ""),
     skills: normalizeList(body.skills),
@@ -351,6 +336,15 @@ export async function buildApp(options = {}) {
     if (!allowed.includes(user.accessRole)) throw httpError(403, "FORBIDDEN", "Your project role cannot perform this action.");
   }
 
+  function requireTeamRole(user, allowedAccessRoles, allowedProjectRoles) {
+    if (allowedAccessRoles.includes(user.accessRole)) return;
+    const assignments = store.read().workspace.project?.document?.context?.assignments;
+    const assignment = Array.isArray(assignments) ? assignments.find((item) => item.memberId === user.memberId) : null;
+    if (!assignment || !allowedProjectRoles.includes(assignment.roleId)) {
+      throw httpError(403, "FORBIDDEN", "Your project role cannot perform this action.");
+    }
+  }
+
   app.addHook("onRequest", async (request) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return;
     const origin = request.headers.origin;
@@ -420,7 +414,7 @@ export async function buildApp(options = {}) {
         passwordHash,
         accessRole: isFirstAccount ? "owner_admin" : invitedMember?.missionRole === "advisor" ? "advisor" : "member",
         institution: normalizeText(body.institution),
-        primaryArea: invitedMember?.primaryArea || body.primaryArea,
+        primaryArea: invitedMember?.primaryArea || body.primaryArea || "systems",
         active: true,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -446,7 +440,7 @@ export async function buildApp(options = {}) {
           displayName: nextUser.name,
           email,
           missionRole: "captain",
-          primaryArea: body.primaryArea,
+          primaryArea: body.primaryArea || "systems",
           secondaryAreas: [],
           institution: nextUser.institution,
           course: normalizeText(body.course || ""),
@@ -516,7 +510,7 @@ export async function buildApp(options = {}) {
     preHandler: [requireAuth, requireCsrf],
     schema: { tags: ["Team"], summary: "Add or invite a team profile", security: [{ sessionCookie: [], csrfToken: [] }], body: memberBody }
   }, async (request, reply) => {
-    requireRole(request.auth.user, ["owner_admin", "captain", "manager"]);
+    requireTeamRole(request.auth.user, ["owner_admin", "captain", "manager"], ["captain", "manager"]);
     const input = cleanMemberInput(request.body);
     if (!validateEmail(input.email)) throw httpError(400, "INVALID_EMAIL", "Enter a valid email address.");
     if (request.auth.user.accessRole === "manager" && input.missionRole !== "member") throw httpError(403, "FORBIDDEN", "Managers can invite members only.");
@@ -550,7 +544,7 @@ export async function buildApp(options = {}) {
       params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(80, 1) } }
     }
   }, async (request) => {
-    requireRole(request.auth.user, ["owner_admin", "captain"]);
+    requireTeamRole(request.auth.user, ["owner_admin", "captain"], ["captain"]);
     const invitationCode = randomBytes(9).toString("base64url").toUpperCase();
     const member = await store.update((data) => {
       const existing = data.members.find((item) => item.id === request.params.id);
@@ -577,7 +571,7 @@ export async function buildApp(options = {}) {
   }, async (request) => {
     const currentUser = request.auth.user;
     const isSelf = currentUser.memberId === request.params.id;
-    if (!isSelf) requireRole(currentUser, ["owner_admin", "captain", "manager"]);
+    if (!isSelf) requireTeamRole(currentUser, ["owner_admin", "captain", "manager"], ["captain", "manager"]);
     const member = await store.update((data) => {
       const existing = data.members.find((item) => item.id === request.params.id);
       if (!existing) throw httpError(404, "MEMBER_NOT_FOUND", "Team member was not found.");
@@ -597,6 +591,14 @@ export async function buildApp(options = {}) {
         existing[key] = ["secondaryAreas", "skills"].includes(key) ? normalizeList(body[key]) : normalizeText(body[key]);
       }
       if (existing.secondaryAreas) existing.secondaryAreas = existing.secondaryAreas.filter((area) => area !== existing.primaryArea);
+      if (existing.accountId) {
+        const account = data.users.find((item) => item.id === existing.accountId);
+        if (account) {
+          account.name = existing.displayName;
+          account.institution = existing.institution;
+          account.updatedAt = new Date().toISOString();
+        }
+      }
       if (body.accessRole !== undefined) {
         requireRole(currentUser, ["owner_admin"]);
         if (!existing.accountId) throw httpError(409, "ACCOUNT_REQUIRED", "This profile does not have an account yet.");
@@ -621,7 +623,7 @@ export async function buildApp(options = {}) {
       params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(80, 1) } }
     }
   }, async (request, reply) => {
-    requireRole(request.auth.user, ["owner_admin", "captain"]);
+    requireTeamRole(request.auth.user, ["owner_admin", "captain"], ["captain"]);
     await store.update((data) => {
       const index = data.members.findIndex((item) => item.id === request.params.id);
       if (index < 0) throw httpError(404, "MEMBER_NOT_FOUND", "Team member was not found.");
@@ -731,6 +733,10 @@ export async function buildApp(options = {}) {
   }, async (request) => {
     if (request.auth.user.accessRole === "advisor") throw httpError(403, "FORBIDDEN", "Advisors have read-only access to the project workspace.");
     if (!validProjectDocument(request.body)) throw httpError(400, "INVALID_PROJECT", "The project document is invalid or unsupported.");
+    const currentContext = store.read().workspace.project?.document?.context;
+    if (!isDeepStrictEqual(currentContext, request.body.context)) {
+      requireTeamRole(request.auth.user, ["owner_admin", "captain", "manager"], ["captain", "manager"]);
+    }
     return store.update((data) => {
       const previous = data.workspace.project;
       const record = {

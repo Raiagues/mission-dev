@@ -1,5 +1,6 @@
 import { Brand } from "./Brand";
 import { UserBadge } from "./UserBadge";
+import { UsersRound } from "lucide-react";
 import type { Language } from "../lib/types";
 
 type Props = {
@@ -8,8 +9,12 @@ type Props = {
   expanded: boolean;
   connectedLabel: string;
   homeLabel: string;
+  teamLabel: string;
+  homeActive: boolean;
+  teamActive: boolean;
   onToggle: () => void;
   onHome: () => void;
+  onTeam: () => void;
   onStepSelect: (step: number) => void;
 };
 
@@ -35,7 +40,7 @@ function LockIcon() {
   return <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.2" y="5.1" width="7.6" height="5.1" rx="1" /><path d="M3.8 5.1V3.7a2.2 2.2 0 0 1 4.4 0v1.4" /></svg>;
 }
 
-export function MissionSidebar({ language, currentStep, expanded, connectedLabel, homeLabel, onToggle, onHome, onStepSelect }: Props) {
+export function MissionSidebar({ language, currentStep, expanded, connectedLabel, homeLabel, teamLabel, homeActive, teamActive, onToggle, onHome, onTeam, onStepSelect }: Props) {
   const phaseLabels = labels[language];
   const stateWords = language === "pt" ? { complete: "Concluída", current: "Fase atual", locked: "Ainda não disponível" } : { complete: "Complete", current: "Current phase", locked: "Not available yet" };
 
@@ -49,9 +54,14 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
           </button>
         </div>
 
-        <button className={currentStep === null ? "mission-sidebar-home active" : "mission-sidebar-home"} type="button" onClick={onHome} title={!expanded ? homeLabel : undefined}>
+        <button className={homeActive ? "mission-sidebar-home active" : "mission-sidebar-home"} type="button" onClick={onHome} title={!expanded ? homeLabel : undefined}>
           <span className="mission-sidebar-home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10.5V20h13v-9.5" /></svg></span>
           <span className="mission-sidebar-home-label">{homeLabel}</span>
+        </button>
+
+        <button className={teamActive ? "mission-sidebar-home mission-sidebar-team active" : "mission-sidebar-home mission-sidebar-team"} type="button" onClick={onTeam} title={!expanded ? teamLabel : undefined}>
+          <span className="mission-sidebar-home-icon"><UsersRound aria-hidden="true" /></span>
+          <span className="mission-sidebar-home-label">{teamLabel}</span>
         </button>
 
         <div className="mission-sidebar-divider" />

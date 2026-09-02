@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   BookOpenCheck,
   CalendarDays,
   Check,
-  Copy,
   ExternalLink,
+  FileCode2,
   FileSpreadsheet,
   FileText,
   GitBranch,
@@ -12,28 +13,19 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
-  KeyRound,
+  Settings2,
   Trash2,
-  UserRoundPlus,
   UsersRound,
   X
 } from "lucide-react";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
 import { ApiError, useAuth } from "../lib/auth";
-import {
-  ACCESS_ROLES,
-  MISSION_ROLES,
-  TEAM_AREAS,
-  memberInitials,
-  missionRoleLabel,
-  teamAreaLabel
-} from "../lib/team";
-import type { AccessRole, ArtifactKind, ConnectedArtifact, MemberStatus, MissionRole, TeamAreaId, TeamMember } from "../lib/team";
-import type { Language } from "../lib/types";
+import { programCategory, programModality, referenceProgram } from "../lib/programs";
 import type { MissionProject } from "../lib/projectStore";
-import "../setup-memory.css";
-import "../setup-memory-source-cards.css";
+import { memberInitials } from "../lib/team";
+import type { ArtifactKind, ConnectedArtifact, TeamMember } from "../lib/team";
+import type { Language } from "../lib/types";
 import "../project-memory.css";
 
 type Props = {
@@ -44,21 +36,31 @@ type Props = {
   onProjectChange: (project: MissionProject) => void;
   onContinue: () => void;
   onHome: () => void;
+  onEditProject: () => void;
+  onManageTeam: () => void;
 };
 
-type DialogState =
-  | { kind: "member"; value: TeamMember | null }
-  | { kind: "artifact"; value: ConnectedArtifact | null }
-  | null;
+type DialogState = ConnectedArtifact | "new" | null;
+type ArtifactFormat = "github" | "pdf" | "csv" | "sheet" | "doc" | "code" | "link";
 
-const obsatLogoSrc = `${import.meta.env.BASE_URL}brand/obsat-logo.png`;
+function artifactFormat(artifact: ConnectedArtifact): ArtifactFormat {
+  if (artifact.kind === "repository" || /github\.com/iu.test(artifact.url)) return "github";
+  const path = artifact.url.toLocaleLowerCase("en-US").split(/[?#]/u)[0];
+  if (path.endsWith(".pdf")) return "pdf";
+  if (path.endsWith(".csv")) return "csv";
+  if (/\.(xlsx?|ods)$/u.test(path)) return "sheet";
+  if (/\.(docx?|odt|rtf)$/u.test(path)) return "doc";
+  if (/\.(ino|c|cpp|h|ts|tsx|js|py)$/u.test(path)) return "code";
+  return artifact.kind === "link" ? "link" : "doc";
+}
 
-function ArtifactIcon({ kind }: { kind: ArtifactKind }) {
-  if (kind === "official") return <BookOpenCheck aria-hidden="true" />;
-  if (kind === "repository") return <GitBranch aria-hidden="true" />;
-  if (kind === "dataset") return <FileSpreadsheet aria-hidden="true" />;
-  if (kind === "document") return <FileText aria-hidden="true" />;
-  return <Link2 aria-hidden="true" />;
+function ArtifactIcon({ artifact }: { artifact: ConnectedArtifact }) {
+  const format = artifactFormat(artifact);
+  if (format === "github") return <div className="pm-format-icon github"><GitBranch aria-hidden="true" /><span>GH</span></div>;
+  if (["csv", "sheet"].includes(format)) return <div className="pm-format-icon sheet"><FileSpreadsheet aria-hidden="true" /><span>{format === "csv" ? "CSV" : "XLS"}</span></div>;
+  if (format === "code") return <div className="pm-format-icon code"><FileCode2 aria-hidden="true" /><span>CODE</span></div>;
+  if (format === "link") return <div className="pm-format-icon link"><Link2 aria-hidden="true" /></div>;
+  return <div className={`pm-format-icon ${format}`}><FileText aria-hidden="true" /><span>{format === "pdf" ? "PDF" : "DOC"}</span></div>;
 }
 
 function MemoryDialog({ title, eyebrow, children, onClose }: { title: string; eyebrow: string; children: React.ReactNode; onClose: () => void }) {
@@ -70,131 +72,89 @@ function MemoryDialog({ title, eyebrow, children, onClose }: { title: string; ey
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  return (
-    <div className="memory-dialog-backdrop" role="presentation" onPointerDown={onClose}>
-      <section className="memory-dialog" role="dialog" aria-modal="true" aria-labelledby="memory-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
-        <header className="memory-dialog-head">
-          <div><span>{eyebrow}</span><h2 id="memory-dialog-title">{title}</h2></div>
-          <button type="button" onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
-        </header>
-        {children}
-      </section>
-    </div>
-  );
+  return <div className="pm-dialog-backdrop" role="presentation" onPointerDown={onClose}>
+    <section className="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pm-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
+      <header><div><span>{eyebrow}</span><h2 id="pm-dialog-title">{title}</h2></div><button type="button" onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button></header>
+      {children}
+    </section>
+  </div>;
 }
 
-export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Props) {
+export function StudySetupPage({ language, project, t, onLanguageChange, onContinue, onEditProject, onManageTeam }: Props) {
   const auth = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [artifacts, setArtifacts] = useState<ConnectedArtifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [invitationCode, setInvitationCode] = useState("");
   const [dialog, setDialog] = useState<DialogState>(null);
 
   const c = useMemo(() => language === "pt" ? {
     title: "MEMÓRIA DO PROJETO",
-    subtitle: "Contexto, equipe e referências conectadas para esta missão.",
-    program: "PROGRAMA / COMPETIÇÃO",
-    competition: "3ª Olimpíada Brasileira de Satélites",
-    edition: "Modalidade prática · OBSAT MCTI",
-    deadline: "Próximo marco oficial: 02–05/09/2026",
-    connected: "Conectado",
-    sources: "FONTES E ARTEFATOS CONECTADOS",
-    source: "FONTE DA MISSÃO",
-    addSource: "Conectar fonte",
-    editSource: "Editar fonte",
+    subtitle: "Contexto oficial, equipe e referências vivas desta missão.",
+    referenceProgram: "PROGRAMA DE REFERÊNCIA",
+    edition: "3ª edição",
+    edital: "Edital",
+    milestone: "Próximo marco oficial",
+    sources: "ARTEFATOS DA EQUIPE",
+    sourcesHint: "Repositórios, documentos e dados produzidos ou adotados pela equipe.",
+    connect: "Conectar fonte",
+    edit: "Editar fonte",
     connectedOn: "Conectado em",
-    official: "Oficial",
-    team: "EQUIPE",
-    addPerson: "Adicionar pessoa",
-    editPerson: "Editar perfil",
-    demo: "Demonstração",
-    invited: "Aguardando conta",
-    active: "Conta ativa",
+    team: "EQUIPE DO PROJETO",
+    teamHint: "Pessoas, cargos e setores definidos para este projeto.",
+    manageTeam: "Gerenciar equipe",
     continue: "Começar concepção",
-    loading: "Carregando memória do projeto",
+    configure: "Configurar projeto",
+    emptyTitle: "A memória começa vazia",
+    emptyText: "Defina o projeto, o programa de referência e a equipe para construir esta memória.",
+    emptySources: "Nenhum artefato conectado.",
+    emptyTeam: "Nenhuma pessoa selecionada para este projeto.",
+    loading: "Carregando memória",
     save: "Salvar",
     remove: "Remover",
     cancel: "Cancelar",
-    name: "Nome completo",
-    email: "E-mail",
-    missionRole: "Função na equipe",
-    primaryArea: "Área principal",
-    secondaryAreas: "Áreas de apoio",
-    institution: "Instituição",
-    course: "Curso",
-    academicStage: "Período ou etapa",
-    skills: "Competências",
-    skillsHint: "Separe por vírgulas",
-    availability: "Horas disponíveis por semana",
-    notes: "Notas para o contexto da missão",
-    accessRole: "Acesso ao projeto",
-    generateInvite: "Gerar convite",
-    inviteReady: "Código de convite válido por 7 dias",
-    copyInvite: "Copiar código",
     kind: "Tipo",
     label: "Nome da fonte",
     url: "Endereço ou caminho",
     description: "Descrição",
-    tags: "Marcadores",
-    tagsHint: "Separe por vírgulas",
-    open: "Abrir fonte",
-    loadError: "Não foi possível carregar a memória do projeto.",
+    open: "Abrir",
     saved: "Alteração salva.",
-    sourceKinds: { official: "Regulamento oficial", document: "Documento", repository: "Repositório", dataset: "Planilha / dados", link: "Link" }
+    loadError: "Não foi possível carregar a memória do projeto.",
+    sourceKinds: { document: "Documento", repository: "Repositório GitHub", dataset: "Planilha ou dados", link: "Link" }
   } : {
     title: "PROJECT MEMORY",
-    subtitle: "Context, team, and connected references for this mission.",
-    program: "PROGRAM / COMPETITION",
-    competition: "3rd Brazilian Satellite Olympiad",
-    edition: "Practical modality · OBSAT MCTI",
-    deadline: "Next official milestone: 02–05/09/2026",
-    connected: "Connected",
-    sources: "CONNECTED SOURCES AND ARTIFACTS",
-    source: "MISSION SOURCE",
-    addSource: "Connect source",
-    editSource: "Edit source",
+    subtitle: "Official context, team, and living references for this mission.",
+    referenceProgram: "REFERENCE PROGRAM",
+    edition: "3rd edition",
+    edital: "Rules",
+    milestone: "Next official milestone",
+    sources: "TEAM ARTIFACTS",
+    sourcesHint: "Repositories, documents, and data produced or adopted by the team.",
+    connect: "Connect source",
+    edit: "Edit source",
     connectedOn: "Connected on",
-    official: "Official",
-    team: "TEAM",
-    addPerson: "Add person",
-    editPerson: "Edit profile",
-    demo: "Demo profile",
-    invited: "Awaiting account",
-    active: "Active account",
+    team: "PROJECT TEAM",
+    teamHint: "People, roles, and sectors defined for this project.",
+    manageTeam: "Manage team",
     continue: "Start conception",
-    loading: "Loading project memory",
+    configure: "Configure project",
+    emptyTitle: "Memory starts empty",
+    emptyText: "Define the project, reference program, and team to build this memory.",
+    emptySources: "No artifacts connected.",
+    emptyTeam: "No people selected for this project.",
+    loading: "Loading memory",
     save: "Save",
     remove: "Remove",
     cancel: "Cancel",
-    name: "Full name",
-    email: "Email",
-    missionRole: "Team role",
-    primaryArea: "Primary area",
-    secondaryAreas: "Supporting areas",
-    institution: "Institution",
-    course: "Degree or course",
-    academicStage: "Academic stage",
-    skills: "Skills",
-    skillsHint: "Separate with commas",
-    availability: "Available hours per week",
-    notes: "Mission context notes",
-    accessRole: "Project access",
-    generateInvite: "Create invitation",
-    inviteReady: "Invitation code valid for 7 days",
-    copyInvite: "Copy code",
     kind: "Type",
     label: "Source name",
     url: "Address or path",
     description: "Description",
-    tags: "Tags",
-    tagsHint: "Separate with commas",
-    open: "Open source",
-    loadError: "Project memory could not be loaded.",
+    open: "Open",
     saved: "Change saved.",
-    sourceKinds: { official: "Official regulation", document: "Document", repository: "Repository", dataset: "Spreadsheet / data", link: "Link" }
+    loadError: "Project memory could not be loaded.",
+    sourceKinds: { document: "Document", repository: "GitHub repository", dataset: "Spreadsheet or data", link: "Link" }
   }, [language]);
 
   const loadMemory = useCallback(async () => {
@@ -206,7 +166,7 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Pr
         auth.api<{ artifacts: ConnectedArtifact[] }>("/artifacts")
       ]);
       setMembers(teamResponse.members);
-      setArtifacts(artifactResponse.artifacts);
+      setArtifacts(artifactResponse.artifacts.filter((artifact) => !artifact.official));
     } catch (reason) {
       setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
     } finally {
@@ -214,102 +174,43 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Pr
     }
   }, [auth.api, c.loadError]);
 
-  useEffect(() => {
-    void loadMemory();
-  }, [loadMemory]);
+  useEffect(() => { void loadMemory(); }, [loadMemory]);
 
-  const canManageTeam = Boolean(auth.user && ["owner_admin", "captain", "manager"].includes(auth.user.accessRole));
-  const canRemoveMember = Boolean(auth.user && ["owner_admin", "captain"].includes(auth.user.accessRole));
-  const canConnectSource = auth.user?.accessRole !== "advisor";
-
-  function canEditMember(member: TeamMember) {
-    return canManageTeam || member.id === auth.user?.memberId;
-  }
+  const canConnect = auth.user?.accessRole !== "advisor";
+  const program = referenceProgram(project.context.programId);
+  const modality = programModality(program, project.context.modalityId);
+  const category = programCategory(modality, project.context.categoryId);
+  const projectMembers = useMemo(() => project.context.assignments.map((assignment) => {
+    const member = members.find((item) => item.id === assignment.memberId);
+    if (!member) return null;
+    return {
+      member,
+      role: project.context.roles.find((role) => role.id === assignment.roleId)?.name || assignment.roleId,
+      sector: project.context.sectors.find((sector) => sector.id === assignment.sectorId)?.name || ""
+    };
+  }).filter((value): value is NonNullable<typeof value> => Boolean(value)), [members, project.context]);
 
   function canEditArtifact(artifact: ConnectedArtifact) {
     if (!auth.user) return false;
-    if (artifact.official) return auth.user.accessRole === "owner_admin";
     return artifact.createdBy === auth.user.id || ["owner_admin", "captain", "manager"].includes(auth.user.accessRole);
   }
 
-  async function saveMember(event: React.FormEvent<HTMLFormElement>, current: TeamMember | null) {
+  function formattedDate(value: string) {
+    return new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+  }
+
+  async function saveArtifact(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setFeedback("");
-    const data = new FormData(event.currentTarget);
-    const selectedAccessRole = String(data.get("accessRole") || "") as AccessRole | "";
-    const payload = {
-      displayName: String(data.get("displayName") || ""),
-      email: String(data.get("email") || ""),
-      missionRole: String(data.get("missionRole") || "member") as MissionRole,
-      primaryArea: String(data.get("primaryArea") || "systems") as TeamAreaId,
-      secondaryAreas: data.getAll("secondaryAreas").map(String) as TeamAreaId[],
-      institution: String(data.get("institution") || ""),
-      course: String(data.get("course") || ""),
-      academicStage: String(data.get("academicStage") || ""),
-      skills: String(data.get("skills") || "").split(",").map((item) => item.trim()).filter(Boolean),
-      availabilityHours: Number(data.get("availabilityHours") || 0),
-      notes: String(data.get("notes") || ""),
-      accountStatus: (current?.accountStatus || "invited") as MemberStatus,
-      ...(selectedAccessRole ? { accessRole: selectedAccessRole } : {})
-    };
-    try {
-      if (current) await auth.api(`/team/members/${current.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-      else {
-        const response = await auth.api<{ invitationCode: string }>("/team/members", { method: "POST", body: JSON.stringify(payload) });
-        setInvitationCode(response.invitationCode);
-      }
-      setDialog(null);
-      await loadMemory();
-      setFeedback(current ? c.saved : "");
-    } catch (reason) {
-      setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeMember(member: TeamMember) {
-    setBusy(true);
-    setFeedback("");
-    try {
-      await auth.api(`/team/members/${member.id}`, { method: "DELETE" });
-      setDialog(null);
-      await loadMemory();
-    } catch (reason) {
-      setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function generateInvitation(member: TeamMember) {
-    setBusy(true);
-    setFeedback("");
-    try {
-      const response = await auth.api<{ invitationCode: string }>(`/team/members/${member.id}/invitation`, { method: "POST" });
-      setInvitationCode(response.invitationCode);
-      setDialog(null);
-      await loadMemory();
-      setFeedback("");
-    } catch (reason) {
-      setFeedback(reason instanceof ApiError ? reason.message : c.loadError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveArtifact(event: React.FormEvent<HTMLFormElement>, current: ConnectedArtifact | null) {
-    event.preventDefault();
-    setBusy(true);
-    setFeedback("");
+    const current = dialog === "new" ? null : dialog;
     const data = new FormData(event.currentTarget);
     const payload = {
       kind: String(data.get("kind") || "document") as ArtifactKind,
       label: String(data.get("label") || ""),
       url: String(data.get("url") || ""),
       description: String(data.get("description") || ""),
-      tags: String(data.get("tags") || "").split(",").map((item) => item.trim()).filter(Boolean)
+      tags: current?.tags || []
     };
     try {
       if (current) await auth.api(`/artifacts/${current.id}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -326,7 +227,6 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Pr
 
   async function removeArtifact(artifact: ConnectedArtifact) {
     setBusy(true);
-    setFeedback("");
     try {
       await auth.api(`/artifacts/${artifact.id}`, { method: "DELETE" });
       setDialog(null);
@@ -338,146 +238,50 @@ export function StudySetupPage({ language, t, onLanguageChange, onContinue }: Pr
     }
   }
 
-  function statusLabel(status: MemberStatus) {
-    if (status === "active") return c.active;
-    if (status === "invited") return c.invited;
-    return c.demo;
+  if (!project.context.configured || !program || !modality || !category) {
+    return <div className="pm-shell"><main className="pm-main"><header className="pm-topbar"><div className="top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div></header><section className="pm-unconfigured"><div className="pm-empty-symbol"><BookOpenCheck aria-hidden="true" /></div><span>{c.title}</span><h1>{c.emptyTitle}</h1><p>{c.emptyText}</p><button type="button" onClick={onEditProject}>{c.configure}<ArrowRight aria-hidden="true" /></button></section></main></div>;
   }
 
-  function formattedDate(value: string) {
-    return new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
-  }
+  const edital = modality.officialDocuments[0];
 
-  return (
-    <div className="setup-shell setup-shell-fixed memory-shell project-memory-shell">
-      <main className="setup-main setup-main-fixed memory-main project-memory-main">
-        <header className="setup-topbar memory-topbar">
-          <div className="top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div>
-        </header>
+  return <div className="pm-shell">
+    <main className="pm-main">
+      <header className="pm-topbar"><button type="button" onClick={onEditProject}><Settings2 aria-hidden="true" />{c.configure}</button><div className="top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div></header>
+      <div className="pm-workspace">
+        <header className="pm-heading"><div><span>{project.name}</span><h1>{c.title}</h1><p>{c.subtitle}</p></div></header>
 
-        <div className="memory-screen memory-reference-layout project-memory-layout">
-          <div className="memory-heading memory-reference-heading project-memory-heading">
-            <h1>{c.title}</h1>
-            <p>{c.subtitle}</p>
+        <section className="pm-program">
+          <div className="pm-program-label">{c.referenceProgram}</div>
+          <div className="pm-program-logo">{program.logoSrc ? <img src={program.logoSrc} alt={program.shortName} /> : <BookOpenCheck aria-hidden="true" />}</div>
+          <div className="pm-program-copy"><strong>{program.name[language]}</strong><span>{c.edition} · {modality.label[language]} · {category.label[language]}</span><small>{program.description[language]}</small></div>
+          <div className="pm-program-actions">
+            {edital && <a href={edital.url} target="_blank" rel="noreferrer"><BookOpenCheck aria-hidden="true" /><span>{c.edital}</span><ExternalLink aria-hidden="true" /></a>}
+            <a className="pm-milestone" href={modality.milestone.url} target="_blank" rel="noreferrer"><CalendarDays aria-hidden="true" /><span><small>{c.milestone}</small><strong>{modality.milestone.date} · {modality.milestone.label[language]}</strong></span><ExternalLink aria-hidden="true" /></a>
           </div>
+        </section>
 
-          <section className="memory-program-card project-program-card">
-            <div className="memory-program-label">{c.program}</div>
-            <div className="memory-program-row">
-              <div className="memory-program-badge"><img src={obsatLogoSrc} alt="OBSAT" /></div>
-              <div className="memory-program-copy">
-                <strong>{c.competition}</strong>
-                <span className="project-program-edition">{c.edition}</span>
-                <div className="memory-program-meta"><span><CalendarDays aria-hidden="true" />{c.deadline}</span></div>
-              </div>
-              <a className="memory-program-connected" href="https://wiki.obsat.org.br/books/modalidade-pratica" target="_blank" rel="noreferrer"><i><Check aria-hidden="true" /></i>{c.connected}<ExternalLink aria-hidden="true" /></a>
-            </div>
-          </section>
-
-          <section className="memory-reference-section project-memory-section">
-            <header className="project-section-head">
-              <div className="memory-reference-label">{c.sources}</div>
-              {canConnectSource && <button type="button" onClick={() => setDialog({ kind: "artifact", value: null })}><Plus aria-hidden="true" />{c.addSource}</button>}
-            </header>
-            {loading ? <div className="project-memory-loading"><LoaderCircle aria-hidden="true" />{c.loading}</div> : (
-              <div className="memory-reference-sources-grid project-sources-grid">
-                {artifacts.map((artifact) => (
-                  <article className={`memory-reference-source-card project-source-card ${artifact.official ? "official" : ""}`} key={artifact.id}>
-                    <a className="project-source-link" href={artifact.url} target="_blank" rel="noreferrer" aria-label={`${c.open}: ${artifact.label}`}>
-                      <div className={`memory-reference-source-icon ${artifact.kind}`}><ArtifactIcon kind={artifact.kind} /></div>
-                      <div className="memory-reference-source-copy">
-                        <small>{artifact.official ? c.official : c.sourceKinds[artifact.kind]}</small>
-                        <strong>{artifact.label}</strong>
-                        <span><Link2 aria-hidden="true" />{c.connectedOn} {formattedDate(artifact.connectedAt)}</span>
-                      </div>
-                    </a>
-                    {canEditArtifact(artifact) && <button className="project-source-edit" type="button" onClick={() => setDialog({ kind: "artifact", value: artifact })} aria-label={`${c.editSource}: ${artifact.label}`}><Pencil aria-hidden="true" /></button>}
-                    <div className="memory-reference-source-check"><Check aria-hidden="true" /></div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="memory-reference-section memory-reference-team-section project-memory-section">
-            <header className="project-section-head">
-              <div className="memory-reference-label">{c.team}</div>
-              {canManageTeam && <button type="button" onClick={() => setDialog({ kind: "member", value: null })}><UserRoundPlus aria-hidden="true" />{c.addPerson}</button>}
-            </header>
-            {loading ? <div className="project-memory-loading"><LoaderCircle aria-hidden="true" />{c.loading}</div> : (
-              <div className="project-team-grid">
-                {members.map((member) => (
-                  <button className="project-member-card" type="button" key={member.id} onClick={() => canEditMember(member) && setDialog({ kind: "member", value: member })} disabled={!canEditMember(member)}>
-                    <div className="memory-reference-avatar">{memberInitials(member.displayName)}</div>
-                    <div className="project-member-copy">
-                      <strong>{member.displayName}</strong>
-                      <span>{missionRoleLabel(member.missionRole, language)} · {teamAreaLabel(member.primaryArea, language)}</span>
-                      <small className={`project-member-status ${member.accountStatus}`}><i />{statusLabel(member.accountStatus)}</small>
-                    </div>
-                    {canEditMember(member) && <Pencil className="project-member-edit" aria-hidden="true" />}
-                  </button>
-                ))}
-                {canManageTeam && <button className="project-member-add" type="button" onClick={() => setDialog({ kind: "member", value: null })}><UsersRound aria-hidden="true" /><span>{c.addPerson}</span><Plus aria-hidden="true" /></button>}
-              </div>
-            )}
-          </section>
-
-          {feedback && <div className="project-memory-feedback" role="status">{feedback}</div>}
-          {invitationCode && <div className="project-invitation" role="status"><KeyRound aria-hidden="true" /><div><span>{c.inviteReady}</span><strong>{invitationCode}</strong></div><button type="button" onClick={() => void navigator.clipboard.writeText(invitationCode)} aria-label={c.copyInvite}><Copy aria-hidden="true" /></button><button type="button" onClick={() => setInvitationCode("")} aria-label={c.cancel}><X aria-hidden="true" /></button></div>}
-
-          <div className="memory-next-step memory-reference-next-step project-memory-next-step">
-            <button className="technical-button primary memory-primary" onClick={onContinue}>{c.continue}<span aria-hidden="true">→</span></button>
+        <section className="pm-band pm-artifacts">
+          <header><div><h2>{c.sources}</h2><p>{c.sourcesHint}</p></div>{canConnect && <button type="button" onClick={() => setDialog("new")}><Plus aria-hidden="true" />{c.connect}</button>}</header>
+          <div className="pm-horizontal-track">
+            {loading && <div className="pm-loading"><LoaderCircle aria-hidden="true" />{c.loading}</div>}
+            {!loading && artifacts.length === 0 && <button className="pm-track-empty" type="button" onClick={() => canConnect && setDialog("new")} disabled={!canConnect}><Link2 aria-hidden="true" /><span>{c.emptySources}</span></button>}
+            {!loading && artifacts.map((artifact) => <article className="pm-artifact" key={artifact.id}><a href={artifact.url} target="_blank" rel="noreferrer" aria-label={`${c.open}: ${artifact.label}`}><ArtifactIcon artifact={artifact} /><div><small>{artifact.kind === "official" ? c.sourceKinds.link : c.sourceKinds[artifact.kind]}</small><strong>{artifact.label}</strong><span>{c.connectedOn} {formattedDate(artifact.connectedAt)}</span></div><ExternalLink aria-hidden="true" /></a>{canEditArtifact(artifact) && <button type="button" onClick={() => setDialog(artifact)} aria-label={`${c.edit}: ${artifact.label}`}><Pencil aria-hidden="true" /></button>}</article>)}
           </div>
-        </div>
-      </main>
+        </section>
 
-      {dialog?.kind === "member" && (
-        <MemoryDialog eyebrow={c.team} title={dialog.value ? c.editPerson : c.addPerson} onClose={() => setDialog(null)}>
-          <form className="memory-dialog-form" onSubmit={(event) => void saveMember(event, dialog.value)}>
-            <div className="memory-form-grid">
-              <label><span>{c.name}</span><input name="displayName" required minLength={2} maxLength={100} defaultValue={dialog.value?.displayName || ""} /></label>
-              <label><span>{c.email}</span><input name="email" type="email" required readOnly={Boolean(dialog.value?.accountId)} maxLength={254} defaultValue={dialog.value?.email || ""} /></label>
-              <label><span>{c.missionRole}</span><select name="missionRole" defaultValue={dialog.value?.missionRole || "member"}>{MISSION_ROLES.map((role) => <option key={role.id} value={role.id}>{role[language]}</option>)}</select></label>
-              <label><span>{c.primaryArea}</span><select name="primaryArea" defaultValue={dialog.value?.primaryArea || "systems"}>{TEAM_AREAS.map((area) => <option key={area.id} value={area.id}>{area[language]}</option>)}</select></label>
-              <label><span>{c.institution}</span><input name="institution" required maxLength={160} defaultValue={dialog.value?.institution || ""} /></label>
-              <label><span>{c.course}</span><input name="course" maxLength={120} defaultValue={dialog.value?.course || ""} /></label>
-              <label><span>{c.academicStage}</span><input name="academicStage" maxLength={80} defaultValue={dialog.value?.academicStage || ""} /></label>
-              <label><span>{c.availability}</span><input name="availabilityHours" type="number" min={0} max={80} defaultValue={dialog.value?.availabilityHours ?? 8} /></label>
-              {dialog.value?.accountId && auth.user?.accessRole === "owner_admin" && <label><span>{c.accessRole}</span><select name="accessRole" defaultValue={dialog.value.accessRole || "member"}>{ACCESS_ROLES.map((role) => <option key={role.id} value={role.id}>{role[language]}</option>)}</select></label>}
-              <label className="memory-form-wide"><span>{c.skills}</span><input name="skills" maxLength={1000} defaultValue={dialog.value?.skills.join(", ") || ""} placeholder={c.skillsHint} /></label>
-              <fieldset className="memory-form-wide memory-area-fieldset"><legend>{c.secondaryAreas}</legend><div>{TEAM_AREAS.map((area) => <label key={area.id}><input type="checkbox" name="secondaryAreas" value={area.id} defaultChecked={dialog.value?.secondaryAreas.includes(area.id)} /><span>{area[language]}</span></label>)}</div></fieldset>
-              <label className="memory-form-wide"><span>{c.notes}</span><textarea name="notes" maxLength={800} rows={3} defaultValue={dialog.value?.notes || ""} /></label>
-            </div>
-            {feedback && <div className="memory-dialog-error" role="alert">{feedback}</div>}
-            <footer className="memory-dialog-actions">
-              {dialog.value && canRemoveMember && !dialog.value.accountId && <button className="danger" type="button" disabled={busy} onClick={() => void removeMember(dialog.value!)}><Trash2 aria-hidden="true" />{c.remove}</button>}
-              {dialog.value && canRemoveMember && !dialog.value.accountId && <button type="button" disabled={busy} onClick={() => void generateInvitation(dialog.value!)}><KeyRound aria-hidden="true" />{c.generateInvite}</button>}
-              <button type="button" onClick={() => setDialog(null)}>{c.cancel}</button>
-              <button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="project-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{c.save}</button>
-            </footer>
-          </form>
-        </MemoryDialog>
-      )}
+        <section className="pm-band pm-team">
+          <header><div><h2>{c.team}</h2><p>{c.teamHint}</p></div><button type="button" onClick={onManageTeam}><UsersRound aria-hidden="true" />{c.manageTeam}</button></header>
+          <div className="pm-horizontal-track">
+            {loading && <div className="pm-loading"><LoaderCircle aria-hidden="true" />{c.loading}</div>}
+            {!loading && projectMembers.length === 0 && <button className="pm-track-empty" type="button" onClick={onEditProject}><UsersRound aria-hidden="true" /><span>{c.emptyTeam}</span></button>}
+            {!loading && projectMembers.map(({ member, role, sector }) => <button className="pm-member" type="button" key={member.id} onClick={onManageTeam}><span>{memberInitials(member.displayName)}</span><div><strong>{member.displayName}</strong><small>{[role, sector].filter(Boolean).join(" · ")}</small><em>{member.course || member.institution}</em></div><Pencil aria-hidden="true" /></button>)}
+          </div>
+        </section>
 
-      {dialog?.kind === "artifact" && (
-        <MemoryDialog eyebrow={c.sources} title={dialog.value ? c.editSource : c.addSource} onClose={() => setDialog(null)}>
-          <form className="memory-dialog-form" onSubmit={(event) => void saveArtifact(event, dialog.value)}>
-            <div className="memory-form-grid">
-              <label><span>{c.kind}</span><select name="kind" defaultValue={dialog.value?.kind || "document"} disabled={dialog.value?.official}>{(["document", "repository", "dataset", "link", ...(dialog.value?.official ? ["official"] : [])] as ArtifactKind[]).map((kind) => <option key={kind} value={kind}>{c.sourceKinds[kind]}</option>)}</select>{dialog.value?.official && <input type="hidden" name="kind" value="official" />}</label>
-              <label><span>{c.label}</span><input name="label" required minLength={2} maxLength={140} defaultValue={dialog.value?.label || ""} /></label>
-              <label className="memory-form-wide"><span>{c.url}</span><input name="url" required maxLength={1000} defaultValue={dialog.value?.url || ""} placeholder="https://..." /></label>
-              <label className="memory-form-wide"><span>{c.description}</span><textarea name="description" maxLength={500} rows={3} defaultValue={dialog.value?.description || ""} /></label>
-              <label className="memory-form-wide"><span>{c.tags}</span><input name="tags" maxLength={600} defaultValue={dialog.value?.tags.join(", ") || ""} placeholder={c.tagsHint} /></label>
-            </div>
-            {feedback && <div className="memory-dialog-error" role="alert">{feedback}</div>}
-            <footer className="memory-dialog-actions">
-              {dialog.value && !dialog.value.official && <button className="danger" type="button" disabled={busy} onClick={() => void removeArtifact(dialog.value!)}><Trash2 aria-hidden="true" />{c.remove}</button>}
-              <button type="button" onClick={() => setDialog(null)}>{c.cancel}</button>
-              <button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="project-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{c.save}</button>
-            </footer>
-          </form>
-        </MemoryDialog>
-      )}
-    </div>
-  );
+        <footer className="pm-footer"><span role="status">{feedback}</span><button className="primary" type="button" onClick={onContinue}>{c.continue}<ArrowRight aria-hidden="true" /></button></footer>
+      </div>
+    </main>
+
+    {dialog && <MemoryDialog eyebrow={c.sources} title={dialog === "new" ? c.connect : c.edit} onClose={() => setDialog(null)}><form className="pm-dialog-form" onSubmit={(event) => void saveArtifact(event)}><div className="pm-form-grid"><label><span>{c.kind}</span><select name="kind" defaultValue={dialog === "new" ? "document" : dialog.kind}>{(["document", "repository", "dataset", "link"] as const).map((kind) => <option key={kind} value={kind}>{c.sourceKinds[kind]}</option>)}</select></label><label><span>{c.label}</span><input name="label" required minLength={2} maxLength={140} defaultValue={dialog === "new" ? "" : dialog.label} /></label><label className="wide"><span>{c.url}</span><input name="url" required maxLength={1000} defaultValue={dialog === "new" ? "" : dialog.url} placeholder="https://..." /></label><label className="wide"><span>{c.description}</span><textarea name="description" maxLength={500} rows={3} defaultValue={dialog === "new" ? "" : dialog.description} /></label></div>{feedback && <div className="pm-dialog-error" role="alert">{feedback}</div>}<footer>{dialog !== "new" && <button className="danger" type="button" disabled={busy} onClick={() => void removeArtifact(dialog)}><Trash2 aria-hidden="true" />{c.remove}</button>}<button type="button" onClick={() => setDialog(null)}>{c.cancel}</button><button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{c.save}</button></footer></form></MemoryDialog>}
+  </div>;
 }

@@ -1,0 +1,170 @@
+import type { Language } from "./types";
+
+export type ProgramId = "obsat" | "lasc" | "sae-aerodesign" | "formula-sae" | "baja-sae";
+
+export type OfficialProgramDocument = {
+  id: string;
+  label: Record<Language, string>;
+  url: string;
+  format: "web" | "pdf";
+};
+
+export type ProgramCategory = {
+  id: string;
+  label: Record<Language, string>;
+  description: Record<Language, string>;
+};
+
+export type ProgramModality = {
+  id: string;
+  label: Record<Language, string>;
+  description: Record<Language, string>;
+  categories: ProgramCategory[];
+  officialDocuments: OfficialProgramDocument[];
+  milestone: {
+    label: Record<Language, string>;
+    date: string;
+    url: string;
+  };
+};
+
+export type ReferenceProgram = {
+  id: ProgramId;
+  shortName: string;
+  name: Record<Language, string>;
+  description: Record<Language, string>;
+  available: boolean;
+  logoSrc?: string;
+  modalities: ProgramModality[];
+};
+
+const practicalDocuments: OfficialProgramDocument[] = [
+  {
+    id: "obsat-practical-rules",
+    label: { pt: "Edital da Modalidade Prática", en: "Practical Modality rules" },
+    url: "https://wiki.obsat.org.br/books/modalidade-pratica",
+    format: "web"
+  },
+  {
+    id: "obsat-practical-schedule",
+    label: { pt: "Cronograma oficial", en: "Official schedule" },
+    url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma",
+    format: "web"
+  }
+];
+
+const theoreticalDocuments: OfficialProgramDocument[] = [
+  {
+    id: "obsat-theoretical-rules",
+    label: { pt: "Edital da Modalidade Teórica", en: "Theoretical Modality rules" },
+    url: "https://wiki.obsat.org.br/books/modalidade-teorica",
+    format: "web"
+  },
+  {
+    id: "obsat-theoretical-schedule",
+    label: { pt: "Cronograma oficial", en: "Official schedule" },
+    url: "https://wiki.obsat.org.br/books/modalidade-teorica/page/cronograma",
+    format: "web"
+  }
+];
+
+export const REFERENCE_PROGRAMS: ReferenceProgram[] = [
+  {
+    id: "obsat",
+    shortName: "OBSAT",
+    name: { pt: "Olimpíada Brasileira de Satélites", en: "Brazilian Satellite Olympiad" },
+    description: {
+      pt: "Planejamento, construção, testes e operação de pequenos satélites.",
+      en: "Planning, construction, testing, and operation of small satellites."
+    },
+    available: true,
+    logoSrc: `${import.meta.env.BASE_URL}brand/obsat-logo.png`,
+    modalities: [
+      {
+        id: "practical",
+        label: { pt: "Modalidade Prática", en: "Practical Modality" },
+        description: {
+          pt: "Equipes concebem uma missão e desenvolvem um protótipo de pequeno satélite.",
+          en: "Teams conceive a mission and develop a small-satellite prototype."
+        },
+        categories: [
+          { id: "n1", label: { pt: "N1 · Fundamental II", en: "N1 · Lower secondary" }, description: { pt: "Categoria definida pelo estudante de maior escolaridade.", en: "Category determined by the most advanced student." } },
+          { id: "n2", label: { pt: "N2 · Médio ou Técnico", en: "N2 · Upper secondary or technical" }, description: { pt: "Categoria para estudantes do ensino médio ou técnico.", en: "Category for upper-secondary or technical students." } },
+          { id: "n3", label: { pt: "N3 · Ensino Superior", en: "N3 · Higher education" }, description: { pt: "Categoria para equipes universitárias.", en: "Category for university teams." } }
+        ],
+        officialDocuments: practicalDocuments,
+        milestone: {
+          label: { pt: "Regional Sudeste 2 · LASC", en: "Southeast Regional 2 · LASC" },
+          date: "02–05/09/2026",
+          url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma"
+        }
+      },
+      {
+        id: "theoretical",
+        label: { pt: "Modalidade Teórica", en: "Theoretical Modality" },
+        description: {
+          pt: "Avaliações online por nível escolar, com conteúdo aeroespacial integrado ao currículo.",
+          en: "Online assessments by school level, integrating space topics into the curriculum."
+        },
+        categories: [
+          { id: "nt1", label: { pt: "NT1 · 1º ano", en: "NT1 · Year 1" }, description: { pt: "Ensino Fundamental.", en: "Primary education." } },
+          { id: "nt2", label: { pt: "NT2 · 2º e 3º anos", en: "NT2 · Years 2 and 3" }, description: { pt: "Ensino Fundamental.", en: "Primary education." } },
+          { id: "nt3", label: { pt: "NT3 · 4º e 5º anos", en: "NT3 · Years 4 and 5" }, description: { pt: "Ensino Fundamental.", en: "Primary education." } },
+          { id: "nt4", label: { pt: "NT4 · 6º e 7º anos", en: "NT4 · Years 6 and 7" }, description: { pt: "Ensino Fundamental.", en: "Lower-secondary education." } },
+          { id: "nt5", label: { pt: "NT5 · 8º e 9º anos", en: "NT5 · Years 8 and 9" }, description: { pt: "Ensino Fundamental.", en: "Lower-secondary education." } },
+          { id: "nt6", label: { pt: "NT6 · Médio ou Técnico", en: "NT6 · Upper secondary or technical" }, description: { pt: "Ensino médio e técnico.", en: "Upper-secondary and technical education." } }
+        ],
+        officialDocuments: theoreticalDocuments,
+        milestone: {
+          label: { pt: "Fase 1 · avaliação online", en: "Phase 1 · online assessment" },
+          date: "14–17/09/2026",
+          url: "https://wiki.obsat.org.br/books/modalidade-teorica/page/cronograma"
+        }
+      }
+    ]
+  },
+  {
+    id: "lasc",
+    shortName: "LASC",
+    name: { pt: "Latin American Space Challenge", en: "Latin American Space Challenge" },
+    description: { pt: "Desafios universitários de foguetes e sistemas espaciais.", en: "University challenges for rockets and space systems." },
+    available: false,
+    modalities: []
+  },
+  {
+    id: "sae-aerodesign",
+    shortName: "SAE AeroDesign",
+    name: { pt: "SAE Brasil AeroDesign", en: "SAE Brasil AeroDesign" },
+    description: { pt: "Projeto e competição de aeronaves radiocontroladas.", en: "Radio-controlled aircraft design competition." },
+    available: false,
+    modalities: []
+  },
+  {
+    id: "formula-sae",
+    shortName: "Formula SAE",
+    name: { pt: "Fórmula SAE Brasil", en: "Formula SAE Brazil" },
+    description: { pt: "Desenvolvimento universitário de veículo monoposto.", en: "University single-seat vehicle development." },
+    available: false,
+    modalities: []
+  },
+  {
+    id: "baja-sae",
+    shortName: "Baja SAE",
+    name: { pt: "Baja SAE Brasil", en: "Baja SAE Brazil" },
+    description: { pt: "Projeto universitário de veículo fora de estrada.", en: "University off-road vehicle design." },
+    available: false,
+    modalities: []
+  }
+];
+
+export function referenceProgram(programId: string | null | undefined): ReferenceProgram | null {
+  return REFERENCE_PROGRAMS.find((program) => program.id === programId) ?? null;
+}
+
+export function programModality(program: ReferenceProgram | null, modalityId: string | null | undefined): ProgramModality | null {
+  return program?.modalities.find((modality) => modality.id === modalityId) ?? null;
+}
+
+export function programCategory(modality: ProgramModality | null, categoryId: string | null | undefined): ProgramCategory | null {
+  return modality?.categories.find((category) => category.id === categoryId) ?? null;
+}
