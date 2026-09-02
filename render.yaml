@@ -5,6 +5,7 @@ services:
     plan: free
     region: virginia
     branch: main
+    # Keep production releases behind the repository quality and security checks.
     autoDeployTrigger: checksPass
     buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build
     startCommand: npm start
