@@ -28,6 +28,7 @@ export type ProgramModality = {
     date: string;
     startDate?: string;
     endDate?: string;
+    approximate?: boolean;
     url: string;
   }>;
   milestone: {
@@ -115,7 +116,7 @@ export const REFERENCE_PROGRAMS: ReferenceProgram[] = [
           { id: "planning", label: { pt: "Fase 1 · Planejamento de missão", en: "Phase 1 · Mission planning" }, date: "24/02–26/10/2025", startDate: "2025-02-24", endDate: "2025-10-26", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/fase-1-planejamento-de-missao-imagine-o-seu-satelite" },
           { id: "build", label: { pt: "Fase 2 · Construção, programação e testes", en: "Phase 2 · Build, program, and test" }, date: "27/10/2025–01/05/2026", startDate: "2025-10-27", endDate: "2026-05-01", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/fase-2-construa-programe-teste-seu-satelite" },
           { id: "regional", label: { pt: "Fase 3 · Etapas regionais", en: "Phase 3 · Regional events" }, date: "05–09/2026", startDate: "2026-05-01", endDate: "2026-09-30", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" },
-          { id: "national", label: { pt: "Fase 4 · Etapa nacional", en: "Phase 4 · National event" }, date: "2º semestre de 2026", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" }
+          { id: "national", label: { pt: "Fase 4 · Etapa nacional", en: "Phase 4 · National event" }, date: "2º semestre de 2026", startDate: "2026-07-01", endDate: "2026-12-31", approximate: true, url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" }
         ],
         milestone: {
           label: { pt: "Regional Sudeste 2 · LASC", en: "Southeast Regional 2 · LASC" },

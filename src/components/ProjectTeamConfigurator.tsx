@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Building2,
   Check,
   Expand,
   GripVertical,
@@ -87,7 +88,10 @@ export function ProjectTeamConfigurator({ language, context, team, members, onSa
     deleteGroup: "Excluir grupo",
     cannotDelete: "Este cargo está em uso.",
     role: "Cargo",
-    sector: "Setor"
+    sector: "Setor",
+    sectorUnit: "Unidade organizacional",
+    sectorOverview: "Estrutura do projeto",
+    roleOverview: "Pessoas e responsabilidades"
   } : {
     description: "Choose participants and organize this project's structure. Nothing changes until you save.",
     sectors: "Sectors",
@@ -123,12 +127,15 @@ export function ProjectTeamConfigurator({ language, context, team, members, onSa
     deleteGroup: "Delete group",
     cannotDelete: "This role is in use.",
     role: "Role",
-    sector: "Sector"
+    sector: "Sector",
+    sectorUnit: "Organizational unit",
+    sectorOverview: "Project structure",
+    roleOverview: "People and responsibilities"
   };
 
   const [draft, setDraft] = useState<Draft>(() => cloneDraft(context));
   const [history, setHistory] = useState<Draft[]>([]);
-  const [groupKind, setGroupKind] = useState<GroupKind>("sectors");
+  const [groupKind, setGroupKind] = useState<GroupKind>("roles");
   const [view, setView] = useState<ViewKind>("list");
   const [fullscreen, setFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -173,9 +180,7 @@ export function ProjectTeamConfigurator({ language, context, team, members, onSa
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  const groups: ProjectStructureItem[] = groupKind === "sectors"
-    ? [...draft.sectors, { id: "", name: c.noSector }]
-    : draft.roles;
+  const groups: ProjectStructureItem[] = groupKind === "sectors" ? draft.sectors : draft.roles;
 
   function assignmentGroup(assignment: ProjectMemberAssignment) {
     return groupKind === "sectors" ? assignment.sectorId : assignment.roleId;
@@ -304,12 +309,21 @@ export function ProjectTeamConfigurator({ language, context, team, members, onSa
 
     {pendingMove && <div className="ptc-confirm"><Expand aria-hidden="true" /><span>{c.moveQuestion}</span><button type="button" onClick={() => setPendingMove(null)}>{c.keep}</button><button className="primary" type="button" onClick={confirmMove}><Check aria-hidden="true" />{c.confirm}</button></div>}
 
-    {view === "list" ? <div className="ptc-list-scroll">
+    {view === "list" && groupKind === "sectors" ? <div className="ptc-sector-list">
+      <div className="ptc-structure-heading"><Building2 aria-hidden="true" /><span><strong>{c.sectorOverview}</strong><small>{draft.sectors.length} {c.sectors.toLocaleLowerCase()}</small></span></div>
+      {draft.sectors.map((sector, index) => <article draggable key={sector.id} onDragStart={(event) => event.dataTransfer.setData("text/sector", sector.id)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); reorderSector(event.dataTransfer.getData("text/sector"), sector.id); }}>
+        <GripVertical aria-hidden="true" />
+        <span><small>{c.sector} {String(index + 1).padStart(2, "0")}</small><input value={sector.name} maxLength={60} onChange={(event) => renameGroup(sector.id, event.target.value)} /></span>
+        <button type="button" title={c.deleteGroup} onClick={() => deleteGroup(sector.id)}><Trash2 aria-hidden="true" /></button>
+      </article>)}
+      <button className="ptc-add-structure" type="button" onClick={() => addGroup(false)}><Plus aria-hidden="true" />{c.addSector}</button>
+    </div> : view === "list" ? <div className="ptc-list-scroll">
+      <div className="ptc-structure-heading roles"><Network aria-hidden="true" /><span><strong>{c.roleOverview}</strong><small>{draft.assignments.length} {c.participating.toLocaleLowerCase()}</small></span></div>
       {teamMembers.map((member) => {
         const assignment = draft.assignments.find((item) => item.memberId === member.id);
         return <article className={assignment ? "selected" : ""} key={member.id}>
           <label><input type="checkbox" checked={Boolean(assignment)} onChange={() => toggleMember(member.id)} /><span className={member.avatarUrl ? "ptc-avatar has-photo" : "ptc-avatar"}>{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : memberInitials(member.displayName)}</span><span><strong>{member.displayName}</strong><small>{member.course || member.email}</small></span><i><Check aria-hidden="true" /></i></label>
-          {assignment && <div className="ptc-list-fields">{groupKind === "roles" ? <label><span>{c.role}</span><select value={assignment.roleId} onChange={(event) => updateAssignment(member.id, { roleId: event.target.value })}>{draft.roles.map((role) => <option value={role.id} key={role.id}>{role.name}</option>)}</select></label> : <label><span>{c.sector}</span><select value={assignment.sectorId} onChange={(event) => updateAssignment(member.id, { sectorId: event.target.value })}><option value="">{c.noSector}</option>{draft.sectors.map((sector) => <option value={sector.id} key={sector.id}>{sector.name}</option>)}</select></label>}<button type="button" title={c.edit} onClick={() => { setEditingId(member.id); setEditingName(member.displayName); }}><Pencil aria-hidden="true" /></button><button type="button" title={c.remove} onClick={() => toggleMember(member.id)}><Trash2 aria-hidden="true" /></button></div>}
+          {assignment && <div className="ptc-list-fields roles"><label><span>{c.role}</span><select value={assignment.roleId} onChange={(event) => updateAssignment(member.id, { roleId: event.target.value })}>{draft.roles.map((role) => <option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label><span>{c.sector}</span><select value={assignment.sectorId} onChange={(event) => updateAssignment(member.id, { sectorId: event.target.value })}><option value="">{c.noSector}</option>{draft.sectors.map((sector) => <option value={sector.id} key={sector.id}>{sector.name}</option>)}</select></label><button type="button" title={c.edit} onClick={() => { setEditingId(member.id); setEditingName(member.displayName); }}><Pencil aria-hidden="true" /></button><button type="button" title={c.remove} onClick={() => toggleMember(member.id)}><Trash2 aria-hidden="true" /></button></div>}
         </article>;
       })}
       <button className="ptc-add-person" type="button" onClick={() => setShowNewPerson((value) => !value)}><UserPlus aria-hidden="true" />{c.addPerson}</button>
@@ -317,18 +331,17 @@ export function ProjectTeamConfigurator({ language, context, team, members, onSa
     </div> : <div className="ptc-canvas" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan}>
       {groupKind === "sectors" && <button className="ptc-add-rail left" type="button" title={c.addSector} onClick={() => addGroup(true)}><Plus aria-hidden="true" /></button>}
       <div className="ptc-stage" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-        <div className="ptc-team-root"><UsersRoundIcon /><span><strong>{team.name}</strong><small>{draft.assignments.length} {c.participating.toLocaleLowerCase()}</small></span></div>
+        <div className="ptc-team-root"><UsersRoundIcon /><span><small>{groupKind === "sectors" ? c.sectorOverview : c.roleOverview}</small><strong>{team.name}</strong></span></div>
         <div className="ptc-groups">{groups.map((group) => {
           const grouped = draft.assignments.filter((assignment) => assignmentGroup(assignment) === group.id);
-          const managers = grouped.filter((assignment) => assignment.roleId === "manager" || assignment.roleId === "captain");
-          const regular = grouped.filter((assignment) => !managers.includes(assignment));
           const inUse = groupKind === "roles" && grouped.length > 0;
-          return <section className="ptc-group" key={group.id || "unassigned"} draggable={groupKind === "sectors" && Boolean(group.id)} onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData("text/sector", group.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const memberId = event.dataTransfer.getData("text/member"); const sectorId = event.dataTransfer.getData("text/sector"); if (memberId && assignmentGroup(draft.assignments.find((item) => item.memberId === memberId)!) !== group.id) setPendingMove({ memberId, groupId: group.id }); else if (sectorId && groupKind === "sectors") reorderSector(sectorId, group.id); }}>
-            <header>{group.id ? <input value={group.name} maxLength={60} onChange={(event) => renameGroup(group.id, event.target.value)} /> : <strong>{group.name}</strong>}<span><GripVertical aria-hidden="true" />{grouped.length}</span>{group.id && <button type="button" title={inUse ? c.cannotDelete : c.deleteGroup} disabled={inUse} onClick={() => deleteGroup(group.id)}><Trash2 aria-hidden="true" /></button>}</header>
-            {managers.length > 0 && <div className="ptc-managers"><small>{c.manager}</small>{managers.map((assignment) => <MemberNode assignment={assignment} key={assignment.memberId} />)}</div>}
-            <div className="ptc-member-grid">{regular.map((assignment) => <MemberNode assignment={assignment} key={assignment.memberId} />)}{grouped.length === 0 && <span className="ptc-empty">{c.empty}</span>}</div>
-            <button className="ptc-add-under" type="button" title={c.addHere} onClick={() => setPickerGroup(group.id)}><Plus aria-hidden="true" /></button>
-            {pickerGroup === group.id && <div className="ptc-picker"><select autoFocus defaultValue="" onChange={(event) => addExisting(group.id, event.target.value)}><option value="">{c.choose}</option>{unassigned.map((member) => <option value={member.id} key={member.id}>{member.displayName}</option>)}</select><button type="button" onClick={() => setPickerGroup(null)}><X aria-hidden="true" /></button></div>}
+          return <section className={`ptc-group ${groupKind === "sectors" ? "sector-only" : "role-group"}`} key={group.id} draggable={groupKind === "sectors"} onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData("text/sector", group.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const memberId = event.dataTransfer.getData("text/member"); const sectorId = event.dataTransfer.getData("text/sector"); if (groupKind === "roles" && memberId && assignmentGroup(draft.assignments.find((item) => item.memberId === memberId)!) !== group.id) setPendingMove({ memberId, groupId: group.id }); else if (sectorId && groupKind === "sectors") reorderSector(sectorId, group.id); }}>
+            <header><input value={group.name} maxLength={60} onChange={(event) => renameGroup(group.id, event.target.value)} /><span><GripVertical aria-hidden="true" />{groupKind === "roles" ? grouped.length : ""}</span><button type="button" title={inUse ? c.cannotDelete : c.deleteGroup} disabled={inUse} onClick={() => deleteGroup(group.id)}><Trash2 aria-hidden="true" /></button></header>
+            {groupKind === "sectors" ? <div className="ptc-sector-node"><Building2 aria-hidden="true" /><span><small>{c.sectorUnit}</small><strong>{String(draft.sectors.findIndex((item) => item.id === group.id) + 1).padStart(2, "0")}</strong></span></div> : <>
+              <div className="ptc-member-grid">{grouped.map((assignment) => <MemberNode assignment={assignment} key={assignment.memberId} />)}{grouped.length === 0 && <span className="ptc-empty">{c.empty}</span>}</div>
+              <button className="ptc-add-under" type="button" title={c.addHere} onClick={() => setPickerGroup(group.id)}><Plus aria-hidden="true" /></button>
+              {pickerGroup === group.id && <div className="ptc-picker"><select autoFocus defaultValue="" onChange={(event) => addExisting(group.id, event.target.value)}><option value="">{c.choose}</option>{unassigned.map((member) => <option value={member.id} key={member.id}>{member.displayName}</option>)}</select><button type="button" onClick={() => setPickerGroup(null)}><X aria-hidden="true" /></button></div>}
+            </>}
           </section>;
         })}</div>
       </div>

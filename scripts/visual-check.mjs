@@ -72,8 +72,12 @@ if (await teamArtifactRows.count() !== initialTeamArtifactCount) throw new Error
 await page.locator(".pm-team-band").getByRole("button", { name: "Configurar equipe" }).click();
 if (await page.locator(".ptc-list-scroll > article").count() < 4) throw new Error("The demo team should expose the captain and three mock members.");
 await page.getByRole("button", { name: "Hierarquia", exact: true }).click();
-if (await page.locator(".ptc-group").count() < 3) throw new Error("The team configurator should show persisted sector columns.");
-await page.screenshot({ path: "/tmp/norte-team-config-hierarchy.png", fullPage: true });
+if (await page.locator(".ptc-member").count() < 4) throw new Error("The roles hierarchy should show project participants and responsibilities.");
+await page.screenshot({ path: "/tmp/norte-team-config-roles.png", fullPage: true });
+await page.getByRole("button", { name: "Setores", exact: true }).click();
+if (await page.locator(".ptc-sector-node").count() < 3) throw new Error("The sectors hierarchy should show persisted organizational units.");
+if (await page.locator(".ptc-member").count() !== 0) throw new Error("The sectors hierarchy must not render project members.");
+await page.screenshot({ path: "/tmp/norte-team-config-sectors.png", fullPage: true });
 await page.locator(".pm-dialog").getByRole("button", { name: "Fechar" }).click();
 
 await page.locator(".pm-topbar .account-badge-trigger").click();
@@ -184,6 +188,9 @@ await page.screenshot({ path: "/tmp/norte-system-consolidated.png", fullPage: tr
 await page.getByRole("tab", { name: /Cronograma/u }).click();
 await page.locator(".conception-timeline").waitFor();
 if (await page.locator(".timeline-phase-list > a").count() < 5) throw new Error("The OBSAT timeline should expose the official conception phases.");
+if (await page.locator(".gantt-bar").count() < 5) throw new Error("The official schedule should render every phase as a Gantt bar.");
+const ganttWidths = await page.locator(".gantt-bar").evaluateAll((bars) => bars.map((bar) => Math.round(bar.getBoundingClientRect().width)));
+if (new Set(ganttWidths).size < 3) throw new Error("Gantt phase bars should reflect different schedule durations.");
 await page.screenshot({ path: "/tmp/norte-conception-timeline.png", fullPage: true });
 
 await page.getByRole("tab", { name: /Descoberta/u }).click();
