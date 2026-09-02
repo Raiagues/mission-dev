@@ -9,7 +9,6 @@ services:
     buildCommand: npm ci --no-audit --no-fund && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: NODE_VERSION
         value: 24.20.0
