@@ -187,6 +187,8 @@ await page.screenshot({ path: "/tmp/norte-system-consolidated.png", fullPage: tr
 
 await page.getByRole("tab", { name: /Cronograma/u }).click();
 await page.locator(".conception-timeline").waitFor();
+if (await page.locator(".timeline-project-flow").count()) throw new Error("The redundant conception flow strip should not appear above the Gantt chart.");
+if ((await page.locator(".timeline-program-mark").innerText()).includes("Próximo marco oficial") === false) throw new Error("The timeline header should expose the next useful official milestone.");
 if (await page.locator(".timeline-phase-list > a").count() < 5) throw new Error("The OBSAT timeline should expose the official conception phases.");
 if (await page.locator(".gantt-bar").count() < 5) throw new Error("The official schedule should render every phase as a Gantt bar.");
 const ganttWidths = await page.locator(".gantt-bar").evaluateAll((bars) => bars.map((bar) => Math.round(bar.getBoundingClientRect().width)));

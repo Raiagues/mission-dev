@@ -1,4 +1,4 @@
-import { CalendarDays, Check, ExternalLink, Flag, Lightbulb, Network } from "lucide-react";
+import { CalendarDays, Check, ExternalLink, Flag } from "lucide-react";
 import { programCategory, programModality, referenceProgram } from "../lib/programs";
 import type { MissionProject } from "../lib/projectStore";
 import type { Language } from "../lib/types";
@@ -6,11 +6,9 @@ import type { Language } from "../lib/types";
 type Props = {
   language: Language;
   project: MissionProject;
-  explorationCount: number;
-  decisionCount: number;
 };
 
-export function ConceptionTimeline({ language, project, explorationCount, decisionCount }: Props) {
+export function ConceptionTimeline({ language, project }: Props) {
   const program = referenceProgram(project.context.programId);
   const modality = programModality(program, project.context.modalityId);
   const category = programCategory(modality, project.context.categoryId);
@@ -20,36 +18,24 @@ export function ConceptionTimeline({ language, project, explorationCount, decisi
 
   const labels = language === "pt" ? {
     eyebrow: "CRONOGRAMA",
-    title: "Da descoberta ao sistema",
+    title: "Cronograma da missão",
     official: "CRONOGRAMA OFICIAL",
-    projectFlow: "FLUXO DE CONCEPÇÃO",
     source: "Abrir fonte oficial",
     complete: "Concluída",
     current: "Em andamento",
     upcoming: "Próxima",
-    memory: "Memória conectada",
-    discovery: "Descoberta",
-    system: "Sistema consolidado",
-    ideas: "ideias",
-    decisions: "decisões",
     milestone: "Próximo marco oficial",
     phase: "Fase",
     today: "Hoje",
     estimated: "Janela aproximada"
   } : {
     eyebrow: "TIMELINE",
-    title: "From discovery to system",
+    title: "Mission timeline",
     official: "OFFICIAL TIMELINE",
-    projectFlow: "CONCEPTION FLOW",
     source: "Open official source",
     complete: "Complete",
     current: "In progress",
     upcoming: "Next",
-    memory: "Memory connected",
-    discovery: "Discovery",
-    system: "Consolidated system",
-    ideas: "ideas",
-    decisions: "decisions",
     milestone: "Next official milestone",
     phase: "Phase",
     today: "Today",
@@ -65,15 +51,9 @@ export function ConceptionTimeline({ language, project, explorationCount, decisi
         </div>
         {program && <div className="timeline-program-mark">
           {program.logoSrc && <img src={program.logoSrc} alt="" />}
-          <span><strong>{program.name[language]}</strong><small>{modality?.label[language]} · {category?.label[language]}</small></span>
+          <span><strong>{program.name[language]}</strong><small>{modality?.label[language]} · {category?.label[language]}</small>{modality && <em><Flag aria-hidden="true" />{labels.milestone} · {modality.milestone.date}</em>}</span>
         </div>}
       </header>
-
-      <div className="timeline-project-flow" aria-label={labels.projectFlow}>
-        <article className="complete"><i><Check aria-hidden="true" /></i><span><small>01</small><strong>{labels.memory}</strong></span></article>
-        <article className="active"><i><Lightbulb aria-hidden="true" /></i><span><small>02 · {explorationCount} {labels.ideas}</small><strong>{labels.discovery}</strong></span></article>
-        <article className={decisionCount > 0 ? "active" : "pending"}><i><Network aria-hidden="true" /></i><span><small>03 · {decisionCount} {labels.decisions}</small><strong>{labels.system}</strong></span></article>
-      </div>
 
       <div className="timeline-official-band">
         <div className="timeline-section-label"><CalendarDays aria-hidden="true" /><span>{labels.official}</span></div>

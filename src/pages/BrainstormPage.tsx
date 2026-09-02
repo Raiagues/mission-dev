@@ -1094,7 +1094,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
             {workspaceMode === "lab" && <div id="brainstorm-lab-toolbar" className="brain-toolbar" data-control />}
           </div>
 
-          {workspaceMode === "timeline" ? <ConceptionTimeline language={language} project={project} explorationCount={labSummary.ideas} decisionCount={labSummary.decisions} /> : workspaceMode === "map" ? <div ref={viewportRef} className={`mission-canvas${panning ? " panning" : ""}${selectionMode ? " selecting" : ""}`} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
+          {workspaceMode === "timeline" ? <ConceptionTimeline language={language} project={project} /> : workspaceMode === "map" ? <div ref={viewportRef} className={`mission-canvas${panning ? " panning" : ""}${selectionMode ? " selecting" : ""}`} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
             <div className="canvas-world" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`, width: WORLD_WIDTH, height: WORLD_HEIGHT }}>
               <div className="bucket-guide ideas"><span>{ux(language, "freeIdeas")}</span></div>
               <div className="bucket-guide questions"><span>{ux(language, "openQuestions")}</span></div>

@@ -41,8 +41,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(126, 183, 235, .25);
+  padding-bottom: 8px;
 }
 
 .conception-timeline-heading > div:first-child {
@@ -100,85 +99,23 @@
   font-size: 9px;
 }
 
-.timeline-project-flow {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(24px, 5vw, 88px);
-  margin: clamp(22px, 3vh, 30px) 0;
-}
-
-.timeline-project-flow::before {
-  position: absolute;
-  z-index: 0;
-  left: 9%;
-  right: 9%;
-  top: 20px;
-  height: 1px;
-  background: linear-gradient(90deg, #33d4a0, #62aaff 55%, rgba(126, 183, 235, .2));
-  content: "";
-}
-
-.timeline-project-flow article {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
+.timeline-program-mark em {
   display: flex;
   align-items: center;
-  gap: 13px;
-}
-
-.timeline-project-flow article > i {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(126, 183, 235, .38);
-  border-radius: 50%;
-  color: #9ab8d1;
-  background: #061a2d;
+  gap: 5px;
+  margin-top: 3px;
+  color: #e4bd67;
+  font-size: 8px;
   font-style: normal;
 }
 
-.timeline-project-flow article > i svg {
-  width: 17px;
-  height: 17px;
-}
-
-.timeline-project-flow article.complete > i {
-  border-color: rgba(51, 212, 160, .62);
-  color: #68e1ba;
-}
-
-.timeline-project-flow article.active > i {
-  border-color: rgba(224, 184, 102, .72);
-  color: #f0c66f;
-  box-shadow: 0 0 0 5px rgba(224, 184, 102, .06);
-}
-
-.timeline-project-flow article > span {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.timeline-project-flow small {
-  color: #7896b0;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
-.timeline-project-flow strong {
-  overflow: hidden;
-  color: #e7f0f8;
-  font-size: 13px;
-  font-weight: 550;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.timeline-program-mark em svg {
+  width: 10px;
+  height: 10px;
 }
 
 .timeline-official-band {
+  margin-top: 20px;
   border-top: 1px solid rgba(224, 184, 102, .3);
   border-bottom: 1px solid rgba(126, 183, 235, .2);
   padding: 16px 0 12px;
@@ -466,21 +403,6 @@
   .conception-timeline-heading {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .timeline-project-flow {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin: 24px 0 30px;
-  }
-
-  .timeline-project-flow::before {
-    left: 21px;
-    right: auto;
-    top: 20px;
-    bottom: 20px;
-    width: 1px;
-    height: auto;
   }
 
   .timeline-gantt-scroll { margin-inline: -14px; border-inline: 0; }
