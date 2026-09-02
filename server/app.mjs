@@ -18,6 +18,19 @@ const PASSWORD_MIN_LENGTH = 15;
 const ACCESS_ROLES = ["owner_admin", "captain", "manager", "member", "advisor"];
 const MEMBER_STATUSES = ["demo", "invited", "active"];
 const ARTIFACT_KINDS = ["official", "document", "repository", "dataset", "link"];
+const MAX_ARTIFACT_FILE_BYTES = 4 * 1024 * 1024;
+const MAX_ARTIFACT_BODY_BYTES = 6 * 1024 * 1024;
+const SAFE_ARTIFACT_MIME_TYPES = new Set([
+  "application/json",
+  "application/msword",
+  "application/pdf",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv",
+  "text/markdown",
+  "text/plain"
+]);
 const COMMON_PASSWORDS = new Set([
   "123456789012345",
   "passwordpassword",
@@ -93,11 +106,14 @@ const ownProfileBody = {
 const artifactProperties = {
   kind: { type: "string", enum: ARTIFACT_KINDS },
   label: string(140, 2),
-  url: string(1000, 1),
+  url: string(MAX_ARTIFACT_BODY_BYTES, 1),
   description: string(500),
   tags: stringList(12, 50),
   scope: { type: "string", enum: ["team", "project"] },
-  ownerId: { anyOf: [string(100, 1), { type: "null" }] }
+  ownerId: { anyOf: [string(100, 1), { type: "null" }] },
+  fileName: string(255),
+  mimeType: string(120),
+  size: { type: "integer", minimum: 0, maximum: MAX_ARTIFACT_FILE_BYTES }
 };
 
 const teamBody = {
@@ -148,6 +164,13 @@ function validatePassword(password) {
 }
 
 function validateArtifactUrl(value) {
+  const dataMatch = /^data:([^;,]+);base64,([a-zA-Z0-9+/=]+)$/u.exec(value);
+  if (dataMatch) {
+    if (!SAFE_ARTIFACT_MIME_TYPES.has(dataMatch[1])) return false;
+    const padding = dataMatch[2].endsWith("==") ? 2 : dataMatch[2].endsWith("=") ? 1 : 0;
+    const decodedSize = Math.floor(dataMatch[2].length * 3 / 4) - padding;
+    return decodedSize > 0 && decodedSize <= MAX_ARTIFACT_FILE_BYTES;
+  }
   if (/^artifacts\/[a-zA-Z0-9_./-]+$/u.test(value) && !value.includes("..")) return true;
   try {
     const url = new URL(value);
@@ -235,7 +258,14 @@ function cleanMemberInput(body) {
 
 function cleanArtifactInput(body) {
   const url = normalizeText(body.url);
-  if (!validateArtifactUrl(url)) throw httpError(400, "INVALID_URL", "Use an HTTP(S) address or a Norte artifact path.");
+  if (!validateArtifactUrl(url)) throw httpError(400, "INVALID_URL", "Use an HTTP(S) address or a supported file up to 4 MB.");
+  const isFile = url.startsWith("data:");
+  const fileName = [...normalizeText(body.fileName || "")].filter((character) => character.charCodeAt(0) >= 32 && !["/", "\\"].includes(character)).join("").slice(0, 255);
+  const mimeType = normalizeText(body.mimeType || "").toLocaleLowerCase("en-US");
+  const size = Number.isInteger(body.size) ? body.size : 0;
+  if (isFile && (!fileName || !SAFE_ARTIFACT_MIME_TYPES.has(mimeType) || size <= 0 || size > MAX_ARTIFACT_FILE_BYTES || !url.startsWith(`data:${mimeType};base64,`))) {
+    throw httpError(400, "INVALID_FILE", "The uploaded file metadata is invalid or unsupported.");
+  }
   return {
     kind: body.kind,
     label: normalizeText(body.label),
@@ -243,7 +273,10 @@ function cleanArtifactInput(body) {
     description: normalizeText(body.description || ""),
     tags: normalizeList(body.tags),
     scope: body.scope === "team" ? "team" : "project",
-    ownerId: normalizeText(body.ownerId || null)
+    ownerId: normalizeText(body.ownerId || null),
+    fileName: isFile ? fileName : "",
+    mimeType: isFile ? mimeType : "",
+    size: isFile ? size : 0
   };
 }
 
@@ -621,11 +654,46 @@ export async function buildApp(options = {}) {
   }, async (request) => {
     const data = store.read();
     return {
-      teams: data.teams.map((team) => ({
-        ...team,
-        membership: team.memberIds.includes(request.auth.user.memberId) ? "member" : team.joinRequests.includes(request.auth.user.memberId) ? "requested" : "available",
-        canManage: canManageNamedTeam(data, request.auth.user, team)
-      }))
+      teams: data.teams.map((team) => {
+        const membership = team.memberIds.includes(request.auth.user.memberId) ? "member" : team.joinRequests.includes(request.auth.user.memberId) ? "requested" : "available";
+        const canManage = canManageNamedTeam(data, request.auth.user, team);
+        const canSeePrivateData = membership === "member" || canManage;
+        return {
+          ...team,
+          memberIds: canSeePrivateData ? team.memberIds : [],
+          artifactIds: canSeePrivateData ? team.artifactIds : [],
+          joinRequests: canManage ? team.joinRequests : [],
+          createdBy: canSeePrivateData ? team.createdBy : null,
+          memberCount: team.memberIds.length,
+          artifactCount: team.artifactIds.length,
+          membership,
+          canManage
+        };
+      })
+    };
+  });
+
+  app.get("/api/directory/members", {
+    preHandler: [requireAuth],
+    schema: { tags: ["Team"], summary: "List public member profiles and approximate presence", security: [{ sessionCookie: [] }] }
+  }, async (request) => {
+    const data = store.read();
+    const now = Date.now();
+    return {
+      members: data.users.filter((user) => user.active).map((user) => {
+        const member = data.members.find((item) => item.id === user.memberId);
+        const lastSeen = Date.parse(user.lastLoginAt || user.updatedAt || user.createdAt || "");
+        const elapsed = Number.isFinite(lastSeen) ? now - lastSeen : Number.POSITIVE_INFINITY;
+        const presence = user.id === request.auth.user.id || elapsed <= 15 * 60 * 1000 ? "online" : elapsed <= 7 * 24 * 60 * 60 * 1000 ? "recent" : "offline";
+        return {
+          id: user.id,
+          displayName: member?.displayName || user.name,
+          institution: member?.institution || user.institution || "",
+          course: member?.course || user.course || "",
+          avatarUrl: member?.avatarUrl || user.avatarUrl || "",
+          presence
+        };
+      })
     };
   });
 
@@ -670,6 +738,28 @@ export async function buildApp(options = {}) {
       return existing;
     });
     return { team };
+  });
+
+  app.delete("/api/teams/:id", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: {
+      tags: ["Team"], summary: "Delete a team that is not connected to a project", security: [{ sessionCookie: [], csrfToken: [] }],
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: string(100, 1) } }
+    }
+  }, async (request, reply) => {
+    await store.update((data) => {
+      const index = data.teams.findIndex((item) => item.id === request.params.id);
+      if (index < 0) throw httpError(404, "TEAM_NOT_FOUND", "Team was not found.");
+      const team = data.teams[index];
+      requireNamedTeamManager(data, request.auth.user, team);
+      const projectUsesTeam = Object.values(data.workspace.projects || {}).some((record) => record?.document?.context?.teamId === team.id);
+      if (projectUsesTeam) throw httpError(409, "TEAM_IN_USE", "Move or delete the projects connected to this team first.");
+      const artifactIds = new Set(team.artifactIds);
+      data.artifacts = data.artifacts.filter((artifact) => !artifactIds.has(artifact.id) && !(artifact.scope === "team" && artifact.ownerId === team.id));
+      data.teams.splice(index, 1);
+      return null;
+    });
+    reply.code(204).send();
   });
 
   app.post("/api/teams/:id/join-requests", {
@@ -914,6 +1004,7 @@ export async function buildApp(options = {}) {
   });
 
   app.post("/api/artifacts", {
+    bodyLimit: MAX_ARTIFACT_BODY_BYTES,
     preHandler: [requireAuth, requireCsrf],
     schema: { tags: ["Artifacts"], summary: "Connect a source or artifact", security: [{ sessionCookie: [], csrfToken: [] }], body: artifactBody }
   }, async (request, reply) => {
@@ -942,6 +1033,7 @@ export async function buildApp(options = {}) {
   });
 
   app.patch("/api/artifacts/:id", {
+    bodyLimit: MAX_ARTIFACT_BODY_BYTES,
     preHandler: [requireAuth, requireCsrf],
     schema: {
       tags: ["Artifacts"],
@@ -1095,6 +1187,31 @@ export async function buildApp(options = {}) {
       data.workspace.project = record;
       return { project: record.document, revision: record.revision, updatedAt: record.updatedAt };
     });
+  });
+
+  app.delete("/api/projects/:id", {
+    preHandler: [requireAuth, requireCsrf],
+    schema: { tags: ["System"], summary: "Delete a project and its project-scoped artifacts", security: [{ sessionCookie: [], csrfToken: [] }], params: projectParams }
+  }, async (request, reply) => {
+    await store.update((data) => {
+      const record = data.workspace.projects?.[request.params.id];
+      if (!record) throw httpError(404, "PROJECT_NOT_FOUND", "Project was not found.");
+      const context = record.document?.context;
+      const team = data.teams.find((item) => item.id === context?.teamId);
+      const projectLead = context?.assignments?.some((item) => item.memberId === request.auth.user.memberId && ["captain", "manager"].includes(item.roleId));
+      const canDelete = request.auth.user.accessRole === "owner_admin" || record.createdBy === request.auth.user.id || projectLead || canManageNamedTeam(data, request.auth.user, team);
+      if (!canDelete) throw httpError(403, "FORBIDDEN", "Only project leadership can delete this project.");
+
+      const projectArtifactIds = new Set(context?.projectArtifactIds || []);
+      data.artifacts = data.artifacts.filter((artifact) => !projectArtifactIds.has(artifact.id) && !(artifact.scope === "project" && artifact.ownerId === request.params.id));
+      delete data.workspace.projects[request.params.id];
+      delete data.workspace.labs?.[request.params.id];
+      if (data.workspace.project?.document?.id === request.params.id) {
+        data.workspace.project = Object.values(data.workspace.projects).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)))[0] || null;
+      }
+      return null;
+    });
+    reply.code(204).send();
   });
 
   app.get("/api/workspace/project", {

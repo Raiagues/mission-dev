@@ -136,6 +136,13 @@
   border-color: rgba(115, 171, 231, 0.18);
 }
 
+.mission-sidebar-team:hover,
+.mission-sidebar-team.active {
+  color: #cffff1;
+  background: rgba(36, 122, 101, .13);
+  border-color: rgba(62, 212, 173, .2);
+}
+
 .mission-sidebar-home-icon {
   width: 30px;
   min-width: 30px;
@@ -189,6 +196,61 @@
   margin: 0 16px 8px;
   background: rgba(120, 170, 222, 0.12);
 }
+
+.mission-context-switcher {
+  display: grid;
+  gap: 10px;
+  padding: 4px 15px 12px;
+}
+
+.mission-context-switcher label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.mission-context-switcher label > span {
+  color: #64849f;
+  font-size: 9px;
+  font-weight: 680;
+}
+
+.mission-context-switcher select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 30px 0 10px;
+  color: #cfe0ed;
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid rgba(229, 185, 95, .24);
+  border-radius: 5px;
+  outline: 0;
+  background: #061b2e;
+  cursor: pointer;
+}
+
+.mission-context-switcher label:last-child select { border-color: rgba(62, 212, 173, .24); }
+.mission-context-switcher select:focus { border-color: #e5b95f; }
+.mission-context-switcher label:last-child select:focus { border-color: #3ed4ad; }
+.mission-sidebar-divider.context-divider { margin-bottom: 2px; }
+
+.mission-context-compact {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin: 0 auto 4px;
+  padding: 0;
+  color: #ddb963;
+  border: 1px solid rgba(229, 185, 95, .22);
+  border-radius: 7px;
+  background: rgba(108, 77, 20, .08);
+  cursor: pointer;
+}
+
+.mission-context-compact:hover { color: #ffe09b; border-color: rgba(229, 185, 95, .5); background: rgba(108, 77, 20, .18); }
+.mission-context-compact svg { width: 21px; height: 21px; }
 
 .mission-pipeline {
   position: relative;

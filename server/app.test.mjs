@@ -367,3 +367,92 @@ test("minimal profiles, teams, artifacts, and multiple projects share one worksp
   assert.equal(createdTeam.membership, "member");
   assert.equal(createdTeam.artifactIds.includes(artifactId), true);
 });
+
+test("public directories hide private team data and project lifecycle controls deletion", async (t) => {
+  const storeFile = join(tmpdir(), `norte-directory-${randomUUID()}.json`);
+  const app = await buildApp({ storeFile, logger: false });
+  t.after(async () => {
+    await app.close();
+    await rm(storeFile, { force: true });
+  });
+
+  const owner = await app.inject({
+    method: "POST",
+    url: "/api/auth/register",
+    payload: { name: "Capitã Norte", email: "capita@norte.example", password: "uma frase segura para a capita" }
+  });
+  const ownerHeaders = { cookie: cookieFrom(owner), "x-csrf-token": owner.json().csrfToken };
+  const teamResponse = await app.inject({ method: "POST", url: "/api/teams", headers: ownerHeaders, payload: { name: "Equipe Privada", description: "Descrição pública da equipe." } });
+  const teamId = teamResponse.json().team.id;
+
+  const fileContents = Buffer.from("decisao,responsavel\nTeste,Equipe\n");
+  const fileArtifact = await app.inject({
+    method: "POST",
+    url: "/api/artifacts",
+    headers: ownerHeaders,
+    payload: {
+      kind: "dataset",
+      label: "Decisões da equipe",
+      url: `data:text/csv;base64,${fileContents.toString("base64")}`,
+      fileName: "decisoes.csv",
+      mimeType: "text/csv",
+      size: fileContents.length,
+      scope: "team",
+      ownerId: teamId
+    }
+  });
+  assert.equal(fileArtifact.statusCode, 201);
+  assert.equal(fileArtifact.json().artifact.fileName, "decisoes.csv");
+
+  const unsafeFile = await app.inject({
+    method: "POST",
+    url: "/api/artifacts",
+    headers: ownerHeaders,
+    payload: {
+      kind: "document",
+      label: "Página insegura",
+      url: `data:text/html;base64,${Buffer.from("<script>alert(1)</script>").toString("base64")}`,
+      fileName: "pagina.html",
+      mimeType: "text/html",
+      size: 25,
+      scope: "team",
+      ownerId: teamId
+    }
+  });
+  assert.equal(unsafeFile.statusCode, 400);
+
+  const outsider = await app.inject({
+    method: "POST",
+    url: "/api/auth/register",
+    payload: { name: "Pessoa Externa", email: "externa@norte.example", password: "outra frase segura para entrar" }
+  });
+  const outsiderCookie = cookieFrom(outsider);
+  const publicTeams = await app.inject({ method: "GET", url: "/api/teams", headers: { cookie: outsiderCookie } });
+  const publicTeam = publicTeams.json().teams.find((team) => team.id === teamId);
+  assert.equal(publicTeam.memberCount, 1);
+  assert.deepEqual(publicTeam.memberIds, []);
+  assert.deepEqual(publicTeam.artifactIds, []);
+  assert.deepEqual(publicTeam.joinRequests, []);
+  assert.equal(publicTeam.createdBy, null);
+
+  const directory = await app.inject({ method: "GET", url: "/api/directory/members", headers: { cookie: outsiderCookie } });
+  assert.equal(directory.statusCode, 200);
+  assert.equal(directory.json().members.length, 2);
+  assert.equal(Object.hasOwn(directory.json().members[0], "email"), false);
+
+  const project = {
+    schemaVersion: 2,
+    id: "project-team-lifecycle",
+    name: "Projeto de ciclo de vida",
+    context: { teamId, assignments: [{ memberId: owner.json().user.memberId, roleId: "captain", sectorId: "" }], projectArtifactIds: [], teamArtifactIds: [] },
+    board: { nodes: [], links: [] }
+  };
+  assert.equal((await app.inject({ method: "POST", url: "/api/projects", headers: ownerHeaders, payload: project })).statusCode, 201);
+  const teamInUse = await app.inject({ method: "DELETE", url: `/api/teams/${teamId}`, headers: ownerHeaders });
+  assert.equal(teamInUse.statusCode, 409);
+  assert.equal(teamInUse.json().error, "TEAM_IN_USE");
+  assert.equal((await app.inject({ method: "DELETE", url: `/api/projects/${project.id}`, headers: ownerHeaders })).statusCode, 204);
+  assert.equal((await app.inject({ method: "DELETE", url: `/api/teams/${teamId}`, headers: ownerHeaders })).statusCode, 204);
+  const artifactsAfterDelete = await app.inject({ method: "GET", url: "/api/artifacts", headers: { cookie: cookieFrom(owner) } });
+  assert.equal(artifactsAfterDelete.json().artifacts.some((artifact) => artifact.id === fileArtifact.json().artifact.id), false);
+});

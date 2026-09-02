@@ -1,6 +1,7 @@
 import { Brand } from "./Brand";
 import { UserBadge } from "./UserBadge";
-import { Home, UsersRound } from "lucide-react";
+import { FolderKanban, Home, UsersRound } from "lucide-react";
+import type { ProjectSummary, TeamRecord } from "../lib/team";
 import type { Language } from "../lib/types";
 
 type Props = {
@@ -12,9 +13,15 @@ type Props = {
   teamLabel: string;
   homeActive: boolean;
   teamActive: boolean;
+  projects: ProjectSummary[];
+  teams: TeamRecord[];
+  activeProjectId: string;
+  defaultTeamId: string;
   onToggle: () => void;
   onHome: () => void;
   onTeam: () => void;
+  onProjectSelect: (projectId: string) => void;
+  onTeamSelect: (teamId: string) => void;
   onStepSelect: (step: number) => void;
 };
 
@@ -40,9 +47,10 @@ function LockIcon() {
   return <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.2" y="5.1" width="7.6" height="5.1" rx="1" /><path d="M3.8 5.1V3.7a2.2 2.2 0 0 1 4.4 0v1.4" /></svg>;
 }
 
-export function MissionSidebar({ language, currentStep, expanded, connectedLabel, homeLabel, teamLabel, homeActive, teamActive, onToggle, onHome, onTeam, onStepSelect }: Props) {
+export function MissionSidebar({ language, currentStep, expanded, connectedLabel, homeLabel, teamLabel, homeActive, teamActive, projects, teams, activeProjectId, defaultTeamId, onToggle, onHome, onTeam, onProjectSelect, onTeamSelect, onStepSelect }: Props) {
   const phaseLabels = labels[language];
   const stateWords = language === "pt" ? { complete: "Concluída", current: "Fase atual", locked: "Ainda não disponível" } : { complete: "Complete", current: "Current phase", locked: "Not available yet" };
+  const contextWords = language === "pt" ? { project: "Projeto ativo", team: "Equipe padrão", noneProject: "Nenhum projeto", noneTeam: "Nenhuma equipe", switcher: "Trocar projeto ou equipe" } : { project: "Active project", team: "Default team", noneProject: "No project", noneTeam: "No team", switcher: "Switch project or team" };
 
   return (
     <>
@@ -65,6 +73,13 @@ export function MissionSidebar({ language, currentStep, expanded, connectedLabel
         </button>
 
         <div className="mission-sidebar-divider" />
+
+        {expanded ? <section className="mission-context-switcher" aria-label={contextWords.switcher}>
+          <label><span>{contextWords.project}</span><select value={activeProjectId} onChange={(event) => event.target.value && onProjectSelect(event.target.value)}><option value="">{contextWords.noneProject}</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label>
+          <label><span>{contextWords.team}</span><select value={defaultTeamId} onChange={(event) => onTeamSelect(event.target.value)}><option value="">{contextWords.noneTeam}</option>{teams.map((team) => <option value={team.id} key={team.id}>{team.name}</option>)}</select></label>
+        </section> : <button className="mission-context-compact" type="button" onClick={onToggle} title={contextWords.switcher} aria-label={contextWords.switcher}><FolderKanban aria-hidden="true" /></button>}
+
+        <div className="mission-sidebar-divider context-divider" />
 
         <nav className="mission-pipeline" aria-label={language === "pt" ? "Pipeline da missão" : "Mission pipeline"}>
           {phaseLabels.map((label, step) => {

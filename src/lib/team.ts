@@ -51,6 +51,8 @@ export type TeamRecord = {
   updatedAt: string;
   membership?: "member" | "requested" | "available";
   canManage?: boolean;
+  memberCount?: number;
+  artifactCount?: number;
 };
 
 export type ConnectedArtifact = {
@@ -64,8 +66,20 @@ export type ConnectedArtifact = {
   createdBy: string | null;
   scope?: ArtifactScope;
   ownerId?: string | null;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
   connectedAt: string;
   updatedAt: string;
+};
+
+export type DirectoryMember = {
+  id: string;
+  displayName: string;
+  institution: string;
+  course: string;
+  avatarUrl?: string;
+  presence: "online" | "recent" | "offline";
 };
 
 export type ProjectSummary = {

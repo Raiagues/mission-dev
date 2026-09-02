@@ -1,4 +1,5 @@
-import { ArrowRight, FolderOpen, Plus, UsersRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, FolderOpen, LoaderCircle, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
 import { referenceProgram } from "../lib/programs";
@@ -13,8 +14,8 @@ type Props = {
   projects?: ProjectSummary[];
   loadingProjects?: boolean;
   onCreateProject?: () => void;
-  onOpenBrainstorm?: () => void;
   onOpenProject?: (projectId: string) => void;
+  onDeleteProject?: (projectId: string) => Promise<void> | void;
   onOpenTeams?: () => void;
 };
 
@@ -25,110 +26,137 @@ export function HomePage({
   projects = [],
   loadingProjects = false,
   onCreateProject,
-  onOpenBrainstorm,
   onOpenProject,
+  onDeleteProject,
   onOpenTeams
 }: Props) {
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+
   const c = language === "pt" ? {
-    eyebrow: "ESPAÇO DE TRABALHO",
-    title: "Seus projetos",
-    subtitle: "Crie uma equipe, inicie um projeto ou retome um trabalho em andamento.",
     teams: "Equipes",
-    teamsDescription: "Crie uma equipe, aceite convites e organize as pessoas com quem você trabalha.",
+    teamsDescription: "Crie, encontre e organize sua equipe.",
     create: "Novo projeto",
-    createDescription: "Comece pela memória do projeto e conecte programa, equipe e referências.",
+    createDescription: "Defina a memória e comece uma nova concepção.",
     open: "Abrir projeto",
-    openDescription: "Continue um projeto associado à sua conta.",
-    recent: "PROJETOS ASSOCIADOS",
+    openDescription: "Retome exatamente de onde sua equipe parou.",
+    chooseProject: "Escolha um projeto",
+    chooseHint: "O projeto será aberto na última fase trabalhada.",
     empty: "Nenhum projeto criado ainda.",
-    emptyHint: "Seu primeiro projeto aparecerá aqui assim que você o criar.",
+    emptyHint: "Crie o primeiro projeto para começar.",
     loading: "Carregando projetos",
     untitled: "Projeto sem nome",
     noProgram: "Programa ainda não selecionado",
     member: "membro",
     members: "membros",
-    updated: "Atualizado"
+    updated: "Atualizado",
+    delete: "Excluir projeto",
+    deleteConfirm: "Excluir este projeto permanentemente? A equipe e seus artefatos permanentes não serão apagados.",
+    close: "Fechar"
   } : {
-    eyebrow: "WORKSPACE",
-    title: "Your projects",
-    subtitle: "Create a team, start a project, or resume work already in progress.",
     teams: "Teams",
-    teamsDescription: "Create a team, accept invitations, and organize the people you work with.",
+    teamsDescription: "Create, discover, and organize your team.",
     create: "New project",
-    createDescription: "Begin with project memory and connect the program, team, and references.",
+    createDescription: "Set the memory and begin a new conception.",
     open: "Open project",
-    openDescription: "Continue a project associated with your account.",
-    recent: "ASSOCIATED PROJECTS",
+    openDescription: "Resume exactly where your team stopped.",
+    chooseProject: "Choose a project",
+    chooseHint: "The project opens at the last phase your team worked on.",
     empty: "No projects have been created yet.",
-    emptyHint: "Your first project will appear here as soon as you create it.",
+    emptyHint: "Create the first project to get started.",
     loading: "Loading projects",
     untitled: "Untitled project",
     noProgram: "Program not selected yet",
     member: "member",
     members: "members",
-    updated: "Updated"
+    updated: "Updated",
+    delete: "Delete project",
+    deleteConfirm: "Delete this project permanently? The team and its permanent artifacts will not be deleted.",
+    close: "Close"
   };
 
-  const createProject = onCreateProject ?? onOpenBrainstorm ?? (() => undefined);
-  const scrollToProjects = () => document.querySelector(".home-projects")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  useEffect(() => {
+    if (!projectPickerOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setProjectPickerOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [projectPickerOpen]);
+
+  async function deleteProject(projectId: string) {
+    if (!window.confirm(c.deleteConfirm)) return;
+    setDeletingId(projectId);
+    try {
+      await onDeleteProject?.(projectId);
+    } finally {
+      setDeletingId("");
+    }
+  }
 
   return (
-    <div className="home-shell home-dashboard-shell">
+    <div className="home-shell home-landing-shell">
       <main className="home-main">
-        <header className="home-topbar dashboard-topbar">
-          <strong className="dashboard-wordmark">NORTE</strong>
+        <header className="home-topbar home-landing-topbar">
           <div className="top-actions">
             <LanguageToggle language={language} onChange={onLanguageChange} />
             <UserBadge connectedLabel={t("common.connected")} />
           </div>
         </header>
 
-        <div className="home-dashboard">
-          <header className="dashboard-heading">
-            <span>{c.eyebrow}</span>
-            <h1>{c.title}</h1>
-            <p>{c.subtitle}</p>
-          </header>
-
-          <section className="dashboard-actions" aria-label={language === "pt" ? "Ações principais" : "Primary actions"}>
-            <button type="button" onClick={onOpenTeams}>
-              <span className="dashboard-action-icon"><UsersRound aria-hidden="true" /></span>
-              <span><strong>{c.teams}</strong><small>{c.teamsDescription}</small></span>
-              <ArrowRight aria-hidden="true" />
+        <section className="home-landing" aria-labelledby="norte-home-title">
+          <span className="tech-corner tl" /><span className="tech-corner tr" /><span className="tech-corner bl" /><span className="tech-corner br" />
+          <h1 id="norte-home-title">NORTE</h1>
+          <div className="home-action-grid" aria-label={language === "pt" ? "Ações principais" : "Primary actions"}>
+            <button className="home-action-card accent-open" type="button" onClick={() => setProjectPickerOpen(true)}>
+              <span className="home-card-icon"><FolderOpen aria-hidden="true" /></span>
+              <strong>{c.open}</strong>
+              <small>{c.openDescription}</small>
+              <ArrowRight className="home-card-arrow" aria-hidden="true" />
             </button>
-            <button type="button" onClick={createProject}>
-              <span className="dashboard-action-icon"><Plus aria-hidden="true" /></span>
-              <span><strong>{c.create}</strong><small>{c.createDescription}</small></span>
-              <ArrowRight aria-hidden="true" />
+            <button className="home-action-card accent-create" type="button" onClick={onCreateProject}>
+              <span className="home-card-icon"><Plus aria-hidden="true" /></span>
+              <strong>{c.create}</strong>
+              <small>{c.createDescription}</small>
+              <ArrowRight className="home-card-arrow" aria-hidden="true" />
             </button>
-            <button type="button" onClick={scrollToProjects} disabled={projects.length === 0}>
-              <span className="dashboard-action-icon"><FolderOpen aria-hidden="true" /></span>
-              <span><strong>{c.open}</strong><small>{c.openDescription}</small></span>
-              <ArrowRight aria-hidden="true" />
+            <button className="home-action-card accent-team" type="button" onClick={onOpenTeams}>
+              <span className="home-card-icon"><UsersRound aria-hidden="true" /></span>
+              <strong>{c.teams}</strong>
+              <small>{c.teamsDescription}</small>
+              <ArrowRight className="home-card-arrow" aria-hidden="true" />
             </button>
-          </section>
-
-          <section className="home-projects">
-            <div className="home-projects-heading"><span>{c.recent}</span><strong>{projects.length}</strong></div>
-            {loadingProjects ? <div className="home-project-empty">{c.loading}</div> : projects.length === 0 ? (
-              <div className="home-project-empty"><FolderOpen aria-hidden="true" /><strong>{c.empty}</strong><span>{c.emptyHint}</span><button type="button" onClick={createProject}><Plus aria-hidden="true" />{c.create}</button></div>
-            ) : (
-              <div className="home-project-list">
-                {projects.map((project) => {
-                  const program = referenceProgram(project.programId);
-                  const date = new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(project.updatedAt));
-                  return <button type="button" key={project.id} onClick={() => onOpenProject?.(project.id)}>
-                    <span className="home-project-symbol"><FolderOpen aria-hidden="true" /></span>
-                    <span className="home-project-copy"><strong>{project.name || c.untitled}</strong><small>{program?.name[language] ?? c.noProgram}</small></span>
-                    <span className="home-project-meta"><small>{project.memberCount} {project.memberCount === 1 ? c.member : c.members}</small><small>{c.updated} {date}</small></span>
-                    <ArrowRight aria-hidden="true" />
-                  </button>;
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
+
+      {projectPickerOpen && <div className="home-project-dialog-backdrop" role="presentation" onPointerDown={() => setProjectPickerOpen(false)}>
+        <section className="home-project-dialog" role="dialog" aria-modal="true" aria-labelledby="home-project-dialog-title" onPointerDown={(event) => event.stopPropagation()}>
+          <header>
+            <div><span>{c.open}</span><h2 id="home-project-dialog-title">{c.chooseProject}</h2><p>{c.chooseHint}</p></div>
+            <button className="home-dialog-close" type="button" onClick={() => setProjectPickerOpen(false)} aria-label={c.close}><X aria-hidden="true" /></button>
+          </header>
+          <div className="home-project-picker-list">
+            {loadingProjects ? <div className="home-project-dialog-empty"><LoaderCircle className="home-spin" aria-hidden="true" />{c.loading}</div> : projects.length === 0 ? (
+              <div className="home-project-dialog-empty"><FolderOpen aria-hidden="true" /><strong>{c.empty}</strong><span>{c.emptyHint}</span><button type="button" onClick={() => { setProjectPickerOpen(false); onCreateProject?.(); }}><Plus aria-hidden="true" />{c.create}</button></div>
+            ) : projects.map((project) => {
+              const program = referenceProgram(project.programId);
+              const date = new Intl.DateTimeFormat(language === "pt" ? "pt-BR" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(project.updatedAt));
+              return <article className="home-project-picker-row" key={project.id}>
+                <button className="home-project-open" type="button" onClick={() => { setProjectPickerOpen(false); onOpenProject?.(project.id); }}>
+                  <span className="home-project-symbol"><FolderOpen aria-hidden="true" /></span>
+                  <span className="home-project-copy"><strong>{project.name || c.untitled}</strong><small>{program?.name[language] ?? c.noProgram}</small></span>
+                  <span className="home-project-meta"><small>{project.memberCount} {project.memberCount === 1 ? c.member : c.members}</small><small>{c.updated} {date}</small></span>
+                  <ArrowRight aria-hidden="true" />
+                </button>
+                <button className="home-project-delete" type="button" disabled={deletingId === project.id} onClick={() => void deleteProject(project.id)} title={c.delete} aria-label={`${c.delete}: ${project.name || c.untitled}`}>
+                  {deletingId === project.id ? <LoaderCircle className="home-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
+                </button>
+              </article>;
+            })}
+          </div>
+        </section>
+      </div>}
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { createEmptyProject } from "./projectStore";
 import type { MissionProject } from "./projectStore";
-import type { ConnectedArtifact, ProjectSummary, SessionUser, TeamMember, TeamRecord } from "./team";
+import type { ConnectedArtifact, DirectoryMember, ProjectSummary, SessionUser, TeamMember, TeamRecord } from "./team";
 
 const STORAGE_KEY = "norte-pages-demo-v2";
 const LEGACY_STORAGE_KEY = "norte-pages-demo-v1";
-const DEMO_SCHEMA_VERSION = 3;
+const DEMO_SCHEMA_VERSION = 4;
 const TEAM_ID = "team-aurora";
 const PROJECT_ID = "mission-aurora-demo";
 const MOCK_MEMBER_IDS = ["aurora-lucas", "aurora-marina", "aurora-rafael"];
+const COMMUNITY_MEMBER_IDS = ["zenith-ana", "zenith-caio", "icarus-beatriz", "icarus-matheus"];
 const avatarUrl = `${import.meta.env.BASE_URL}profiles/emily-raiane.png`;
 
 type DemoState = {
@@ -92,6 +93,26 @@ function initialState(): DemoState {
     course: "Engenharia Elétrica", academicStage: "7º período", skills: [], availabilityHours: 10, notes: "",
     accountStatus: "invited", accessRole: null, createdAt: now, updatedAt: now
   }, {
+    id: COMMUNITY_MEMBER_IDS[0], accountId: "demo-zenith-ana", displayName: "Ana Luiza Prado", email: "ana@norte.demo",
+    missionRole: "captain", primaryArea: "systems", secondaryAreas: [], institution: "Universidade Federal de Minas Gerais",
+    course: "Engenharia Aeroespacial", academicStage: "6º período", skills: [], availabilityHours: 9, notes: "",
+    accountStatus: "active", accessRole: "captain", createdAt: now, updatedAt: now
+  }, {
+    id: COMMUNITY_MEMBER_IDS[1], accountId: "demo-zenith-caio", displayName: "Caio Mendes", email: "caio@norte.demo",
+    missionRole: "member", primaryArea: "flight_software", secondaryAreas: [], institution: "Universidade Federal de Minas Gerais",
+    course: "Ciência da Computação", academicStage: "5º período", skills: [], availabilityHours: 7, notes: "",
+    accountStatus: "active", accessRole: "member", createdAt: now, updatedAt: now
+  }, {
+    id: COMMUNITY_MEMBER_IDS[2], accountId: "demo-icarus-beatriz", displayName: "Beatriz Sampaio", email: "beatriz@norte.demo",
+    missionRole: "manager", primaryArea: "aerodynamics", secondaryAreas: [], institution: "Universidade Federal de Itajubá",
+    course: "Engenharia Mecânica", academicStage: "8º período", skills: [], availabilityHours: 8, notes: "",
+    accountStatus: "active", accessRole: "manager", createdAt: now, updatedAt: now
+  }, {
+    id: COMMUNITY_MEMBER_IDS[3], accountId: "demo-icarus-matheus", displayName: "Matheus Lima", email: "matheus@norte.demo",
+    missionRole: "member", primaryArea: "electronics", secondaryAreas: [], institution: "Universidade Federal de Itajubá",
+    course: "Engenharia Elétrica", academicStage: "7º período", skills: [], availabilityHours: 6, notes: "",
+    accountStatus: "active", accessRole: "member", createdAt: now, updatedAt: now
+  }, {
     id: MOCK_MEMBER_IDS[1], accountId: null, displayName: "Marina Costa", email: "marina.costa@norte.demo",
     missionRole: "member", primaryArea: "flight_software", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
     course: "Engenharia de Computação", academicStage: "6º período", skills: [], availabilityHours: 8, notes: "",
@@ -131,6 +152,34 @@ function initialState(): DemoState {
     updatedAt: now,
     membership: "member",
     canManage: true
+  }, {
+    id: "team-zenith",
+    name: "Zenith Aerospace",
+    description: "Equipe universitária dedicada a CubeSats e sistemas embarcados.",
+    memberIds: [COMMUNITY_MEMBER_IDS[0], COMMUNITY_MEMBER_IDS[1]],
+    artifactIds: [],
+    joinRequests: [],
+    createdBy: "demo-zenith-ana",
+    createdAt: now,
+    updatedAt: now,
+    membership: "available",
+    canManage: false,
+    memberCount: 2,
+    artifactCount: 0
+  }, {
+    id: "team-icarus",
+    name: "Ícaro Aerodesign",
+    description: "Equipe de competição em projeto, fabricação e ensaios de aeronaves.",
+    memberIds: [COMMUNITY_MEMBER_IDS[2], COMMUNITY_MEMBER_IDS[3]],
+    artifactIds: [],
+    joinRequests: [],
+    createdBy: "demo-icarus-beatriz",
+    createdAt: now,
+    updatedAt: now,
+    membership: "available",
+    canManage: false,
+    memberCount: 2,
+    artifactCount: 0
   }];
   return { schemaVersion: DEMO_SCHEMA_VERSION, members, artifacts, teams, projects: { [project.id]: project }, project, labs: {} };
 }
@@ -140,13 +189,13 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   const migrateMockMembers = Number(value.schemaVersion || 0) < DEMO_SCHEMA_VERSION;
   const projects = value.projects && typeof value.projects === "object" ? value.projects : {};
   if (value.project?.id) projects[value.project.id] = value.project;
-  if (Object.keys(projects).length === 0) projects[fresh.project!.id] = fresh.project!;
+  if (Object.keys(projects).length === 0 && Number(value.schemaVersion || 0) < DEMO_SCHEMA_VERSION) projects[fresh.project!.id] = fresh.project!;
   const members = Array.isArray(value.members) ? value.members : fresh.members;
   const owner = members.find((member) => member.accountId === DEMO_USER.id || member.id === DEMO_USER.memberId);
   if (owner) Object.assign(owner, { displayName: DEMO_USER.name, email: DEMO_USER.email, avatarUrl, accountStatus: "active", accessRole: "owner_admin" });
   else members.unshift(fresh.members[0]);
   if (migrateMockMembers) {
-    for (const member of fresh.members.filter((item) => MOCK_MEMBER_IDS.includes(item.id))) {
+    for (const member of fresh.members.filter((item) => [...MOCK_MEMBER_IDS, ...COMMUNITY_MEMBER_IDS].includes(item.id))) {
       if (!members.some((item) => item.id === member.id)) members.push(member);
     }
   }
@@ -154,7 +203,10 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   if (seedDefaults) {
     for (const artifact of fresh.artifacts) if (!artifacts.some((item) => item.id === artifact.id)) artifacts.push(artifact);
   }
-  const teams = Array.isArray(value.teams) && value.teams.length > 0 ? value.teams : fresh.teams;
+  const teams = Array.isArray(value.teams) ? value.teams : fresh.teams;
+  if (migrateMockMembers) {
+    for (const team of fresh.teams) if (!teams.some((item) => item.id === team.id)) teams.push(team);
+  }
   const primaryTeam = teams.find((team) => team.id === TEAM_ID);
   if (primaryTeam) {
     primaryTeam.memberIds = [...new Set([...primaryTeam.memberIds, DEMO_USER.memberId])];
@@ -233,7 +285,33 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
     return { profile, user: DEMO_USER } as T;
   }
 
-  if (path === "/teams" && method === "GET") return { teams: state.teams.map((team) => ({ ...team, membership: team.memberIds.includes(DEMO_USER.memberId) ? "member" : team.joinRequests.includes(DEMO_USER.memberId) ? "requested" : "available", canManage: team.createdBy === DEMO_USER.id || DEMO_USER.accessRole === "owner_admin" })) } as T;
+  if (path === "/teams" && method === "GET") return { teams: state.teams.map((team) => {
+    const membership = team.memberIds.includes(DEMO_USER.memberId) ? "member" : team.joinRequests.includes(DEMO_USER.memberId) ? "requested" : "available";
+    const canManage = team.createdBy === DEMO_USER.id || (membership === "member" && DEMO_USER.accessRole === "owner_admin");
+    const privateData = membership === "member" || canManage;
+    return {
+      ...team,
+      memberIds: privateData ? team.memberIds : [],
+      artifactIds: privateData ? team.artifactIds : [],
+      joinRequests: canManage ? team.joinRequests : [],
+      createdBy: privateData ? team.createdBy : null,
+      memberCount: team.memberIds.length,
+      artifactCount: team.artifactIds.length,
+      membership,
+      canManage
+    };
+  }) } as T;
+  if (path === "/directory/members" && method === "GET") {
+    const directory: DirectoryMember[] = state.members.filter((member) => member.accountStatus === "active").map((member, index) => ({
+      id: member.accountId || member.id,
+      displayName: member.displayName,
+      institution: member.institution,
+      course: member.course,
+      avatarUrl: member.avatarUrl,
+      presence: member.id === DEMO_USER.memberId || index === 1 ? "online" : index < 4 ? "recent" : "offline"
+    }));
+    return { members: directory } as T;
+  }
   if (path === "/teams" && method === "POST") {
     const now = timestamp();
     const team: TeamRecord = { id: id("team"), name: String(body.name || "Nova equipe"), description: String(body.description || ""), memberIds: [DEMO_USER.memberId], artifactIds: [], joinRequests: [], createdBy: DEMO_USER.id, createdAt: now, updatedAt: now, membership: "member", canManage: true };
@@ -246,6 +324,15 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
     if (team) Object.assign(team, body, { updatedAt: timestamp() });
     writeState(state);
     return { team } as T;
+  }
+  if (teamMatch && method === "DELETE") {
+    const teamId = teamMatch[1];
+    if (Object.values(state.projects).some((project) => project.context.teamId === teamId)) throw new Error("Move or delete the projects connected to this team first.");
+    const artifactIds = new Set(state.teams.find((team) => team.id === teamId)?.artifactIds || []);
+    state.artifacts = state.artifacts.filter((artifact) => !artifactIds.has(artifact.id) && !(artifact.scope === "team" && artifact.ownerId === teamId));
+    state.teams = state.teams.filter((team) => team.id !== teamId);
+    writeState(state);
+    return undefined as T;
   }
   if (teamJoinMatch && method === "POST") {
     const team = state.teams.find((item) => item.id === teamJoinMatch[1]);
@@ -287,6 +374,16 @@ export async function demoApi<T>(path: string, init: RequestInit = {}): Promise<
     state.project = project;
     writeState(state);
     return { project, revision: 1 } as T;
+  }
+  if (projectMatch && method === "DELETE") {
+    const projectId = projectMatch[1];
+    const artifactIds = new Set(state.projects[projectId]?.context.projectArtifactIds || []);
+    state.artifacts = state.artifacts.filter((artifact) => !artifactIds.has(artifact.id) && !(artifact.scope === "project" && artifact.ownerId === projectId));
+    delete state.projects[projectId];
+    delete state.labs[projectId];
+    state.project = Object.values(state.projects).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] || null;
+    writeState(state);
+    return undefined as T;
   }
 
   if (path === "/team/members" && method === "GET") return { members: state.members } as T;

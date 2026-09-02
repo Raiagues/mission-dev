@@ -93,7 +93,7 @@ function defaultTeams(createdAt) {
 export function createInitialData() {
   const timestamp = new Date().toISOString();
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     createdAt: timestamp,
     updatedAt: timestamp,
     users: [],
@@ -110,12 +110,12 @@ export function createInitialData() {
 }
 
 export function normalizeStoredData(value) {
-  if (!value || ![1, 2, 3, 4, 5].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
+  if (!value || ![1, 2, 3, 4, 5, 6].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
     throw new Error("Unsupported Norte data schema.");
   }
   const migratingTeams = !Array.isArray(value.teams);
   const data = structuredClone(value);
-  data.schemaVersion = 5;
+  data.schemaVersion = 6;
   data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
   data.workspace = data.workspace && typeof data.workspace === "object" && !Array.isArray(data.workspace)
     ? data.workspace
@@ -155,7 +155,7 @@ export function normalizeStoredData(value) {
   });
 
   data.teams = Array.isArray(data.teams) ? data.teams : [];
-  if (!data.teams.some((team) => team.id === DEFAULT_TEAM_ID)) data.teams.unshift(defaultTeams(data.createdAt || new Date().toISOString())[0]);
+  if (value.schemaVersion < 6 && !data.teams.some((team) => team.id === DEFAULT_TEAM_ID)) data.teams.unshift(defaultTeams(data.createdAt || new Date().toISOString())[0]);
   const primaryTeam = data.teams.find((team) => team.id === DEFAULT_TEAM_ID);
   if (primaryTeam) {
     primaryTeam.memberIds = [...new Set([...(Array.isArray(primaryTeam.memberIds) ? primaryTeam.memberIds : []), ...(migratingTeams ? data.members.map((member) => member.id) : [])])];

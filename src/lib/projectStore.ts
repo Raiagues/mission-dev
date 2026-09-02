@@ -68,6 +68,9 @@ export type MissionProject = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  navigation: {
+    lastRoute: "setup" | "brainstorm";
+  };
   context: ProjectContext;
   setup: {
     intent: StudyIntent;
@@ -124,6 +127,9 @@ export function createEmptyProject(language: Language = "pt"): MissionProject {
     name: "",
     createdAt: timestamp,
     updatedAt: timestamp,
+    navigation: {
+      lastRoute: "setup"
+    },
     context: {
       configured: false,
       programId: null,
@@ -166,6 +172,10 @@ export function normalizeProject(project: MissionProject, language: Language = "
   return {
     ...defaults,
     ...project,
+    navigation: {
+      ...defaults.navigation,
+      ...(project.navigation && typeof project.navigation === "object" ? project.navigation : {})
+    },
     context: {
       ...defaults.context,
       ...context,

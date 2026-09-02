@@ -226,6 +226,12 @@
   background: rgba(3, 20, 36, .62);
 }
 
+.pm-program-card:not(.empty) { border-color: rgba(229, 185, 95, .34); }
+.pm-program-card .pm-card-label { color: #e5bd69; }
+.pm-program-card .pm-program-copy span,
+.pm-program-card .pm-program-meta svg { color: #d9b45f; }
+.pm-program-card .pm-program-meta > span { border-left-color: rgba(229, 185, 95, .25); }
+
 .pm-card-label {
   position: absolute;
   top: 9px;
@@ -400,6 +406,13 @@
   grid-template-rows: 46px minmax(0, 1fr);
   overflow: hidden;
 }
+
+.pm-team-band h2 { color: #57d8b4; }
+.pm-team-band .pm-team-summary,
+.pm-team-band .pm-member-card { border-color: rgba(62, 212, 173, .28); }
+.pm-team-band .pm-team-summary > svg:first-child { color: #4dd2ae; border-color: rgba(62, 212, 173, .34); }
+.pm-team-band .pm-team-summary small,
+.pm-team-band .pm-member-card small { color: #62ceb1; }
 
 .pm-band > header {
   display: flex;
@@ -629,6 +642,11 @@
   overflow: hidden;
 }
 
+.pm-artifacts-board > .pm-artifact-band:first-child h2 { color: #57d8b4; }
+.pm-artifacts-board > .pm-artifact-band:last-child h2 { color: #ef9b87; }
+.pm-artifacts-board > .pm-artifact-band:first-child .pm-artifact-card { border-color: rgba(62, 212, 173, .24); }
+.pm-artifacts-board > .pm-artifact-band:last-child .pm-artifact-card { border-color: rgba(239, 134, 109, .24); }
+
 .pm-artifact-card {
   position: relative;
   width: 310px;
@@ -804,6 +822,8 @@
   background: #0a4f85;
   color: white;
 }
+
+.pm-footer > button:not(:disabled) { border-color: rgba(239, 134, 109, .72); background: #874739; }
 
 .pm-dialog-backdrop {
   position: fixed;

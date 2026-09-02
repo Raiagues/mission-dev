@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react";
 import { LanguageToggle } from "../components/LanguageToggle";
+import { ArtifactSourceFields } from "../components/ArtifactSourceFields";
 import { UserBadge } from "../components/UserBadge";
 import { ApiError, useAuth } from "../lib/auth";
 import { programCategory, programModality, referenceProgram, REFERENCE_PROGRAMS } from "../lib/programs";
@@ -36,10 +37,11 @@ import "../project-memory.css";
 type Props = {
   language: Language;
   project: MissionProject;
+  isDraft?: boolean;
   t: (path: string) => string;
   onLanguageChange: (language: Language) => void;
   onProjectChange: (project: MissionProject) => void;
-  onContinue: () => void;
+  onContinue: () => Promise<void> | void;
   onHome: () => void;
   onTeams: () => void;
   onManageTeam: () => void;
@@ -58,7 +60,7 @@ type ArtifactFormat = "github" | "pdf" | "csv" | "sheet" | "doc" | "code" | "lin
 
 function artifactFormat(artifact: ConnectedArtifact): ArtifactFormat {
   if (artifact.kind === "repository" || /github\.com/iu.test(artifact.url)) return "github";
-  const path = artifact.url.toLocaleLowerCase("en-US").split(/[?#]/u)[0];
+  const path = (artifact.fileName || artifact.url).toLocaleLowerCase("en-US").split(/[?#]/u)[0];
   if (path.endsWith(".pdf")) return "pdf";
   if (path.endsWith(".csv")) return "csv";
   if (/\.(xlsx?|ods)$/u.test(path)) return "sheet";
@@ -93,7 +95,7 @@ function MemoryDialog({ title, eyebrow, children, onClose }: { title: string; ey
   </div>;
 }
 
-export function StudySetupPage({ language, project, t, onLanguageChange, onProjectChange, onContinue, onHome, onTeams, onManageTeam }: Props) {
+export function StudySetupPage({ language, project, isDraft = false, t, onLanguageChange, onProjectChange, onContinue, onHome, onTeams, onManageTeam }: Props) {
   const auth = useAuth();
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -163,6 +165,7 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
     delete: "Excluir artefato do projeto",
     open: "Abrir",
     continue: "Começar concepção",
+    createAndContinue: "Criar projeto e começar",
     ready: "A memória essencial está pronta.",
     missing: "Para continuar, complete:",
     missingName: "nome do projeto",
@@ -254,6 +257,7 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
     delete: "Delete project artifact",
     open: "Open",
     continue: "Start conception",
+    createAndContinue: "Create project and start",
     ready: "Essential memory is ready.",
     missing: "To continue, complete:",
     missingName: "project name",
@@ -445,11 +449,18 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
       kind: String(data.get("kind") || "document") as ArtifactKind,
       label: String(data.get("label") || ""),
       url: String(data.get("url") || ""),
+      fileName: String(data.get("fileName") || ""),
+      mimeType: String(data.get("mimeType") || ""),
+      size: Number(data.get("size") || 0),
       description: String(data.get("description") || ""),
       tags: [],
       scope: dialog.scope,
       ownerId
     };
+    if (!payload.url) {
+      setFeedback(language === "pt" ? "Adicione um link ou escolha um arquivo." : "Add a link or choose a file.");
+      return;
+    }
     setBusy(true);
     setFeedback("");
     try {
@@ -497,16 +508,24 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
     project.context.assignments.length === 0 ? c.missingMembers : ""
   ].filter(Boolean);
 
-  function continueToConception() {
+  async function continueToConception() {
     if (missing.length > 0) return;
     updateProject({}, { configured: true });
-    onContinue();
+    setBusy(true);
+    setFeedback("");
+    try {
+      await onContinue();
+    } catch (reason) {
+      setFeedback(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : c.loadError);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function ArtifactCard({ artifact, scope }: { artifact: ConnectedArtifact; scope: ArtifactScope }) {
     const canEdit = scope === "project" || Boolean(selectedTeam?.canManage);
     return <article className="pm-artifact-card">
-      <a href={artifact.url} target="_blank" rel="noreferrer" aria-label={`${c.open}: ${artifact.label}`}>
+      <a href={artifact.url} target={artifact.url.startsWith("data:") ? undefined : "_blank"} rel={artifact.url.startsWith("data:") ? undefined : "noreferrer"} download={artifact.url.startsWith("data:") ? artifact.fileName || artifact.label : undefined} aria-label={`${c.open}: ${artifact.label}`}>
         <ArtifactIcon artifact={artifact} />
         <div>
           <small>{scope === "team" ? c.teamReference : c.projectReference}</small>
@@ -586,7 +605,7 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
 
         <footer className="pm-footer">
           <div className={missing.length ? "pm-readiness missing" : "pm-readiness"}>{missing.length ? <><span>{c.missing}</span><strong>{missing.join(" · ")}</strong></> : <><Check aria-hidden="true" /><strong>{c.ready}</strong></>}</div>
-          <button type="button" onClick={continueToConception} disabled={missing.length > 0 || loading}>{loading ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : null}{c.continue}<ArrowRight aria-hidden="true" /></button>
+          <button type="button" onClick={() => void continueToConception()} disabled={missing.length > 0 || loading || busy}>{loading || busy ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : null}{isDraft ? c.createAndContinue : c.continue}<ArrowRight aria-hidden="true" /></button>
         </footer>
       </div>
     </main>
@@ -634,6 +653,6 @@ export function StudySetupPage({ language, project, t, onLanguageChange, onProje
 
     {dialog?.type === "team-artifacts" && <MemoryDialog eyebrow={c.teamArtifacts} title={c.teamLibrary} onClose={() => setDialog(null)}><div className="pm-dialog-copy">{c.teamLibraryHint}</div><div className="pm-selection-list artifacts">{availableTeamArtifacts.map((artifact) => { const checked = project.context.teamArtifactIds.includes(artifact.id); return <label key={artifact.id}><input type="checkbox" checked={checked} onChange={() => toggleTeamArtifact(artifact.id)} /><ArtifactIcon artifact={artifact} /><span><strong>{artifact.label}</strong><small>{artifact.description || artifact.url}</small></span><Check aria-hidden="true" /></label>; })}{availableTeamArtifacts.length === 0 && <div className="pm-artifact-empty">{c.noArtifacts}</div>}</div><footer><button type="button" onClick={() => setDialog({ type: "artifact", scope: "team", artifact: null })}><Plus aria-hidden="true" />{c.addArtifact}</button><button className="primary" type="button" onClick={() => setDialog(null)}><Check aria-hidden="true" />{c.save}</button></footer></MemoryDialog>}
 
-    {dialog?.type === "artifact" && <MemoryDialog eyebrow={dialog.scope === "team" ? c.teamArtifacts : c.projectArtifacts} title={dialog.artifact ? c.editArtifact : c.newProjectArtifact} onClose={() => setDialog(null)}><form className="pm-dialog-form" onSubmit={(event) => void saveArtifact(event)}><label><span>{c.kind}</span><select name="kind" defaultValue={dialog.artifact?.kind || "document"}><option value="document">{c.sourceKinds.document}</option><option value="repository">{c.sourceKinds.repository}</option><option value="dataset">{c.sourceKinds.dataset}</option><option value="link">{c.sourceKinds.link}</option></select></label><label><span>{c.artifactName}</span><input name="label" defaultValue={dialog.artifact?.label || ""} required maxLength={140} autoFocus /></label><label><span>{c.url}</span><input name="url" defaultValue={dialog.artifact?.url || ""} required maxLength={1000} placeholder="https://" /></label><label><span>{c.description}</span><textarea name="description" defaultValue={dialog.artifact?.description || ""} maxLength={500} rows={3} /></label><footer><button type="button" onClick={() => setDialog(null)}>{c.cancel}</button><button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{c.save}</button></footer></form></MemoryDialog>}
+    {dialog?.type === "artifact" && <MemoryDialog eyebrow={dialog.scope === "team" ? c.teamArtifacts : c.projectArtifacts} title={dialog.artifact ? c.editArtifact : c.newProjectArtifact} onClose={() => setDialog(null)}><form className="pm-dialog-form" onSubmit={(event) => void saveArtifact(event)}><label><span>{c.kind}</span><select name="kind" defaultValue={dialog.artifact?.kind || "document"}><option value="document">{c.sourceKinds.document}</option><option value="repository">{c.sourceKinds.repository}</option><option value="dataset">{c.sourceKinds.dataset}</option><option value="link">{c.sourceKinds.link}</option></select></label><label><span>{c.artifactName}</span><input name="label" defaultValue={dialog.artifact?.label || ""} required maxLength={140} autoFocus /></label><ArtifactSourceFields language={language} artifact={dialog.artifact} onError={setFeedback} /><label><span>{c.description}</span><textarea name="description" defaultValue={dialog.artifact?.description || ""} maxLength={500} rows={3} /></label><footer><button type="button" onClick={() => setDialog(null)}>{c.cancel}</button><button className="primary" type="submit" disabled={busy}>{busy ? <LoaderCircle className="pm-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{c.save}</button></footer></form></MemoryDialog>}
   </div>;
 }
