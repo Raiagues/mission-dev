@@ -4,10 +4,29 @@ import { randomUUID } from "node:crypto";
 
 const DEFAULT_TEAM_ID = "team-aurora";
 const TEAM_ARTIFACT_IDS = ["team-aurora-report", "team-aurora-lessons"];
+const MOCK_MEMBER_IDS = ["aurora-lucas", "aurora-marina", "aurora-rafael"];
 
 function defaultMembers(createdAt) {
-  void createdAt;
-  return [];
+  return [
+    {
+      id: MOCK_MEMBER_IDS[0], accountId: null, displayName: "Lucas Ferreira", email: "lucas.ferreira@norte.demo",
+      missionRole: "manager", primaryArea: "electronics", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+      course: "Engenharia Elétrica", academicStage: "7º período", skills: [], availabilityHours: 10, notes: "",
+      accountStatus: "invited", accessRole: null, avatarUrl: "", createdAt, updatedAt: createdAt
+    },
+    {
+      id: MOCK_MEMBER_IDS[1], accountId: null, displayName: "Marina Costa", email: "marina.costa@norte.demo",
+      missionRole: "member", primaryArea: "flight_software", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+      course: "Engenharia de Computação", academicStage: "6º período", skills: [], availabilityHours: 8, notes: "",
+      accountStatus: "invited", accessRole: null, avatarUrl: "", createdAt, updatedAt: createdAt
+    },
+    {
+      id: MOCK_MEMBER_IDS[2], accountId: null, displayName: "Rafael Nunes", email: "rafael.nunes@norte.demo",
+      missionRole: "member", primaryArea: "structures", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+      course: "Engenharia Mecânica", academicStage: "8º período", skills: [], availabilityHours: 6, notes: "",
+      accountStatus: "invited", accessRole: null, avatarUrl: "", createdAt, updatedAt: createdAt
+    }
+  ];
 }
 
 function defaultArtifacts(createdAt) {
@@ -62,7 +81,7 @@ function defaultTeams(createdAt) {
     id: DEFAULT_TEAM_ID,
     name: "Equipe Aurora",
     description: "Equipe universitária de desenvolvimento de pequenos satélites.",
-    memberIds: [],
+    memberIds: [...MOCK_MEMBER_IDS],
     artifactIds: [...TEAM_ARTIFACT_IDS],
     joinRequests: [],
     createdBy: null,
@@ -74,7 +93,7 @@ function defaultTeams(createdAt) {
 export function createInitialData() {
   const timestamp = new Date().toISOString();
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     createdAt: timestamp,
     updatedAt: timestamp,
     users: [],
@@ -91,12 +110,12 @@ export function createInitialData() {
 }
 
 export function normalizeStoredData(value) {
-  if (!value || ![1, 2, 3, 4].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
+  if (!value || ![1, 2, 3, 4, 5].includes(value.schemaVersion) || !Array.isArray(value.users) || !Array.isArray(value.members) || !Array.isArray(value.artifacts)) {
     throw new Error("Unsupported Norte data schema.");
   }
   const migratingTeams = !Array.isArray(value.teams);
   const data = structuredClone(value);
-  data.schemaVersion = 4;
+  data.schemaVersion = 5;
   data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
   data.workspace = data.workspace && typeof data.workspace === "object" && !Array.isArray(data.workspace)
     ? data.workspace
@@ -106,6 +125,11 @@ export function normalizeStoredData(value) {
   if (data.workspace.project?.document?.id) data.workspace.projects[data.workspace.project.document.id] ??= data.workspace.project;
   if (!data.workspace.labs || typeof data.workspace.labs !== "object" || Array.isArray(data.workspace.labs)) data.workspace.labs = {};
   data.members = data.members.filter((member) => member.accountStatus !== "demo" || Boolean(member.accountId));
+  if (value.schemaVersion < 5) {
+    for (const member of defaultMembers(data.createdAt || new Date().toISOString())) {
+      if (!data.members.some((item) => item.id === member.id)) data.members.push(member);
+    }
+  }
   const retiredSeedLabels = new Set([
     "Edital oficial · Modalidade Prática",
     "Cronograma oficial OBSAT",
@@ -135,6 +159,7 @@ export function normalizeStoredData(value) {
   const primaryTeam = data.teams.find((team) => team.id === DEFAULT_TEAM_ID);
   if (primaryTeam) {
     primaryTeam.memberIds = [...new Set([...(Array.isArray(primaryTeam.memberIds) ? primaryTeam.memberIds : []), ...(migratingTeams ? data.members.map((member) => member.id) : [])])];
+    if (value.schemaVersion < 5) primaryTeam.memberIds = [...new Set([...primaryTeam.memberIds, ...MOCK_MEMBER_IDS])];
     const existingArtifactIds = new Set(data.artifacts.map((artifact) => artifact.id));
     const currentArtifactIds = (Array.isArray(primaryTeam.artifactIds) ? primaryTeam.artifactIds : []).filter((artifactId) => existingArtifactIds.has(artifactId));
     primaryTeam.artifactIds = value.schemaVersion < 4 ? [...new Set([...currentArtifactIds, ...TEAM_ARTIFACT_IDS])] : currentArtifactIds;

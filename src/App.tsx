@@ -245,7 +245,7 @@ export function App() {
   }
 
   let page = <HomePage language={language} t={t} onLanguageChange={changeLanguage} projects={projects} loadingProjects={loadingProjects} onCreateProject={() => void createProject()} onOpenProject={(id) => void openProject(id)} onOpenTeams={openTeams} />;
-  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openBrainstorm} onHome={openHome} onEditProject={openMemory} onManageTeam={openProjectTeam} />;
+  if (route === "setup") page = <StudySetupPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onContinue={openBrainstorm} onHome={openHome} onTeams={openTeams} onManageTeam={openProjectTeam} />;
   if (route === "teams") page = <TeamsHubPage language={language} t={t} onLanguageChange={changeLanguage} onBack={openHome} />;
   if (route === "projectTeam") page = <TeamPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onBack={openMemory} onProjectSetup={openMemory} />;
   if (route === "brainstorm") page = <BrainstormPage language={language} project={project} t={t} onLanguageChange={changeLanguage} onProjectChange={changeProject} onHome={openHome} onBackSetup={openMemory} />;

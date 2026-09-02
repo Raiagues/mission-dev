@@ -1,13 +1,50 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const node = process.execPath;
 const vite = resolve(root, "node_modules/vite/bin/vite.js");
+
+const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
+if (nodeMajor < 24 || (nodeMajor === 24 && nodeMinor < 20)) {
+  console.error(`Norte requires Node.js 24.20 or newer. Current version: ${process.versions.node}.`);
+  console.error("Install the version declared in .node-version, then run npm ci and npm run dev again.");
+  process.exit(1);
+}
+
+function portIsAvailable(port) {
+  return new Promise((resolvePort) => {
+    const server = createServer();
+    server.unref();
+    server.once("error", () => resolvePort(false));
+    server.listen({ host: "127.0.0.1", port }, () => server.close(() => resolvePort(true)));
+  });
+}
+
+async function availablePort(preferred) {
+  for (let port = preferred; port < preferred + 20; port += 1) {
+    if (await portIsAvailable(port)) return port;
+  }
+  throw new Error(`No available port found between ${preferred} and ${preferred + 19}.`);
+}
+
+const apiPort = await availablePort(Number(process.env.NORTE_API_PORT || 8787));
+const webPort = await availablePort(Number(process.env.NORTE_WEB_PORT || 5173));
+const developmentEnv = {
+  ...process.env,
+  NORTE_API_PORT: String(apiPort),
+  VITE_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
+  NORTE_ALLOWED_ORIGINS: process.env.NORTE_ALLOWED_ORIGINS || `http://127.0.0.1:${webPort},http://localhost:${webPort}`
+};
+
+console.log(`Norte web: http://127.0.0.1:${webPort}/norte/`);
+console.log(`Norte API: http://127.0.0.1:${apiPort}/docs`);
+
 const children = [
-  spawn(node, [resolve(root, "server/index.mjs")], { cwd: root, stdio: "inherit", env: process.env }),
-  spawn(node, [vite, "--host", "127.0.0.1", "--port", "5173", "--strictPort", "--open", "/norte/"], { cwd: root, stdio: "inherit", env: process.env })
+  spawn(node, [resolve(root, "server/index.mjs")], { cwd: root, stdio: "inherit", env: developmentEnv }),
+  spawn(node, [vite, "--host", "127.0.0.1", "--port", String(webPort), "--strictPort", "--open", "/norte/"], { cwd: root, stdio: "inherit", env: developmentEnv })
 ];
 
 let stopping = false;

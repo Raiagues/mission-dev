@@ -8,12 +8,14 @@ Use Node `24.20+` e execute:
 
 ```bash
 cd /home/rodriger/Documents/mission-dev
-npm install
+npm ci
 npm run dev
 ```
 
 - Site: `http://127.0.0.1:5173/norte/`
 - Swagger: `http://127.0.0.1:8787/docs`
+
+Se uma dessas portas já estiver em uso, o comando escolhe automaticamente a próxima livre e imprime os dois endereços corretos no terminal.
 
 A primeira conta criada vira proprietária/admin. As próximas contas podem ser criadas diretamente; quando um e-mail já foi adicionado a uma equipe, o novo perfil é associado a ela automaticamente.
 

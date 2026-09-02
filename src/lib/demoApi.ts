@@ -4,11 +4,14 @@ import type { ConnectedArtifact, ProjectSummary, SessionUser, TeamMember, TeamRe
 
 const STORAGE_KEY = "norte-pages-demo-v2";
 const LEGACY_STORAGE_KEY = "norte-pages-demo-v1";
+const DEMO_SCHEMA_VERSION = 3;
 const TEAM_ID = "team-aurora";
 const PROJECT_ID = "mission-aurora-demo";
+const MOCK_MEMBER_IDS = ["aurora-lucas", "aurora-marina", "aurora-rafael"];
 const avatarUrl = `${import.meta.env.BASE_URL}profiles/emily-raiane.png`;
 
 type DemoState = {
+  schemaVersion: number;
   members: TeamMember[];
   artifacts: ConnectedArtifact[];
   teams: TeamRecord[];
@@ -83,6 +86,21 @@ function initialState(): DemoState {
     avatarUrl,
     createdAt: now,
     updatedAt: now
+  }, {
+    id: MOCK_MEMBER_IDS[0], accountId: null, displayName: "Lucas Ferreira", email: "lucas.ferreira@norte.demo",
+    missionRole: "manager", primaryArea: "electronics", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+    course: "Engenharia Elétrica", academicStage: "7º período", skills: [], availabilityHours: 10, notes: "",
+    accountStatus: "invited", accessRole: null, createdAt: now, updatedAt: now
+  }, {
+    id: MOCK_MEMBER_IDS[1], accountId: null, displayName: "Marina Costa", email: "marina.costa@norte.demo",
+    missionRole: "member", primaryArea: "flight_software", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+    course: "Engenharia de Computação", academicStage: "6º período", skills: [], availabilityHours: 8, notes: "",
+    accountStatus: "invited", accessRole: null, createdAt: now, updatedAt: now
+  }, {
+    id: MOCK_MEMBER_IDS[2], accountId: null, displayName: "Rafael Nunes", email: "rafael.nunes@norte.demo",
+    missionRole: "member", primaryArea: "structures", secondaryAreas: [], institution: "Universidade Federal de Santa Maria",
+    course: "Engenharia Mecânica", academicStage: "8º período", skills: [], availabilityHours: 6, notes: "",
+    accountStatus: "invited", accessRole: null, createdAt: now, updatedAt: now
   }];
   const artifacts: ConnectedArtifact[] = [
     {
@@ -105,7 +123,7 @@ function initialState(): DemoState {
     id: TEAM_ID,
     name: "Equipe Aurora",
     description: "Equipe universitária de pequenos satélites.",
-    memberIds: [DEMO_USER.memberId],
+    memberIds: [DEMO_USER.memberId, ...MOCK_MEMBER_IDS],
     artifactIds: ["team-aurora-report", "team-aurora-lessons"],
     joinRequests: [],
     createdBy: DEMO_USER.id,
@@ -114,11 +132,12 @@ function initialState(): DemoState {
     membership: "member",
     canManage: true
   }];
-  return { members, artifacts, teams, projects: { [project.id]: project }, project, labs: {} };
+  return { schemaVersion: DEMO_SCHEMA_VERSION, members, artifacts, teams, projects: { [project.id]: project }, project, labs: {} };
 }
 
 function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoState {
   const fresh = initialState();
+  const migrateMockMembers = Number(value.schemaVersion || 0) < DEMO_SCHEMA_VERSION;
   const projects = value.projects && typeof value.projects === "object" ? value.projects : {};
   if (value.project?.id) projects[value.project.id] = value.project;
   if (Object.keys(projects).length === 0) projects[fresh.project!.id] = fresh.project!;
@@ -126,6 +145,11 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   const owner = members.find((member) => member.accountId === DEMO_USER.id || member.id === DEMO_USER.memberId);
   if (owner) Object.assign(owner, { displayName: DEMO_USER.name, email: DEMO_USER.email, avatarUrl, accountStatus: "active", accessRole: "owner_admin" });
   else members.unshift(fresh.members[0]);
+  if (migrateMockMembers) {
+    for (const member of fresh.members.filter((item) => MOCK_MEMBER_IDS.includes(item.id))) {
+      if (!members.some((item) => item.id === member.id)) members.push(member);
+    }
+  }
   const artifacts = Array.isArray(value.artifacts) ? value.artifacts.filter((artifact) => !artifact.official) : fresh.artifacts;
   if (seedDefaults) {
     for (const artifact of fresh.artifacts) if (!artifacts.some((item) => item.id === artifact.id)) artifacts.push(artifact);
@@ -134,12 +158,13 @@ function normalizeState(value: Partial<DemoState>, seedDefaults = false): DemoSt
   const primaryTeam = teams.find((team) => team.id === TEAM_ID);
   if (primaryTeam) {
     primaryTeam.memberIds = [...new Set([...primaryTeam.memberIds, DEMO_USER.memberId])];
+    if (migrateMockMembers) primaryTeam.memberIds = [...new Set([...primaryTeam.memberIds, ...MOCK_MEMBER_IDS])];
     const existingArtifactIds = new Set(artifacts.map((artifact) => artifact.id));
     const currentArtifactIds = primaryTeam.artifactIds.filter((artifactId) => existingArtifactIds.has(artifactId));
     primaryTeam.artifactIds = seedDefaults ? [...new Set([...currentArtifactIds, "team-aurora-report", "team-aurora-lessons"])] : currentArtifactIds;
   }
   const activeProject = value.project?.id ? projects[value.project.id] : Object.values(projects)[0];
-  return { members, artifacts, teams, projects, project: activeProject || null, labs: value.labs || {} };
+  return { schemaVersion: DEMO_SCHEMA_VERSION, members, artifacts, teams, projects, project: activeProject || null, labs: value.labs || {} };
 }
 
 function readState(): DemoState {
