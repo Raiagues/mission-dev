@@ -11,6 +11,7 @@ import {
   deriveMissionDomains,
   deriveLabSuggestions,
   labStorageKey,
+  layoutLabTopDown,
   loadLabBoard,
   organizeLabIntoDomains,
   saveLabBoard
@@ -101,6 +102,32 @@ describe("experimental brainstorm board", () => {
     expect(arranged[0]).toMatchObject({ x: 100, y: 100, pinned: true });
     expect(afterDistance).toBeLessThan(beforeDistance);
     expect(Math.abs(arranged[1].x - board.nodes[1].x)).toBeLessThanOrEqual(64);
+  });
+
+  it("arranges confirmed hierarchies even when automatic movement is disabled", () => {
+    const board = createEmptyLabBoard();
+    board.settings.autoOrganize = false;
+    board.nodes = [
+      createLabNode("Objetivo", 80, 900, "parent"),
+      createLabNode("Alternativa A", 1200, 120, "child-a"),
+      createLabNode("Alternativa B", 300, 500, "child-b")
+    ];
+    board.links = [
+      createLabLink("parent", "child-a", "link-a"),
+      createLabLink("parent", "child-b", "link-b")
+    ];
+
+    const arranged = layoutLabTopDown(board);
+    const parent = arranged.find((node) => node.id === "parent")!;
+    const children = arranged.filter((node) => node.id.startsWith("child"));
+    const childrenCenter = children.reduce((sum, node) => sum + node.x + 120, 0) / children.length;
+
+    expect(children.every((node) => node.y > parent.y)).toBe(true);
+    expect(Math.abs(parent.x + 120 - childrenCenter)).toBeLessThan(2);
+    expect(board.links.map((link) => [link.from, link.to])).toEqual([
+      ["parent", "child-a"],
+      ["parent", "child-b"]
+    ]);
   });
 
   it("classifies ideas into mission areas and keeps local parents above children", () => {

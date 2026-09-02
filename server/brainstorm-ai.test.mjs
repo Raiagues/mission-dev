@@ -29,7 +29,7 @@ test("the Gemini proxy keeps the key server-side and caches structured results",
       assert.equal(init.headers["x-goog-api-key"], "server-only-key");
       assert.doesNotMatch(init.body, /server-only-key/u);
       return new Response(JSON.stringify({
-        candidates: [{ content: { parts: [{ text: JSON.stringify({ relations: [], groups: [], nodePlans: [], tensions: [], gaps: [] }) }] } }]
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ relations: [], groups: [], nodePlans: [], tensions: [], connectionIssues: [], gaps: [] }) }] } }]
       }), { status: 200, headers: { "content-type": "application/json" } });
     }
   });
@@ -43,7 +43,7 @@ test("the Gemini proxy keeps the key server-side and caches structured results",
   assert.match(upstreamRequest, /Focus this organization pass on the payload mission area/u);
   assert.match(upstreamRequest, /OBSAT/u);
   assert.match(upstreamRequest, /2026-09-05/u);
-  assert.deepEqual(JSON.parse(upstreamRequest).generationConfig.responseSchema.required, ["relations", "groups", "nodePlans", "tensions", "gaps"]);
+  assert.deepEqual(JSON.parse(upstreamRequest).generationConfig.responseSchema.required, ["relations", "groups", "nodePlans", "tensions", "connectionIssues", "gaps"]);
   assert.doesNotMatch(JSON.stringify(first), /server-only-key/u);
 });
 

@@ -62,6 +62,10 @@ describe("brainstorm AI contract", () => {
       tensions: [
         { first: "night", second: "thermal", title: "Consumo", explanation: "Pode exigir mais energia.", question: "A energia é suficiente?", confidence: 0.7 },
         { first: "night", second: "alert", title: "Ignorada", explanation: "Já foi dispensada.", question: "Rever?", confidence: 0.8 }
+      ],
+      connectionIssues: [
+        { from: "night", to: "alert", title: "Relação direta", explanation: "Pode faltar uma condição intermediária.", question: "Que condição liga as duas ideias?", confidence: 0.75 },
+        { from: "alert", to: "night", title: "Sentido inventado", explanation: "A direção não existe.", question: "Rever?", confidence: 0.9 }
       ]
     }, request, "gemini-test");
 
@@ -70,6 +74,7 @@ describe("brainstorm AI contract", () => {
     expect(analysis.nodePlans.find((plan) => plan.nodeId === "thermal")).toMatchObject({ parentId: "night", duplicateOf: "", lane: "needs-context" });
     expect(analysis.nodePlans.some((plan) => plan.nodeId === "invented")).toBe(false);
     expect(analysis.tensions).toHaveLength(1);
+    expect(analysis.connectionIssues).toEqual([{ from: "night", to: "alert", title: "Relação direta", explanation: "Pode faltar uma condição intermediária.", question: "Que condição liga as duas ideias?", confidence: 0.75 }]);
     expect(mergeBrainstormAiSuggestions([], analysis, board)[0]).toMatchObject({ source: "gemini", explanation: "A câmera pode apoiar a operação noturna." });
   });
 

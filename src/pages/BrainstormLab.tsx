@@ -25,6 +25,7 @@ import {
   deriveMissionDomains,
   deriveLabSuggestions,
   labGapPoint,
+  layoutLabTopDown,
   loadLabBoard,
   normalizeLabBoard,
   organizeLabIntoDomains,
@@ -127,6 +128,7 @@ const copy = {
     needsContext: "Precisa de contexto",
     possibleDuplicate: "Possível repetição",
     verifyTension: "Ponto para verificar",
+    verifyConnection: "Conexão para revisar",
     editToClarify: "Editar para esclarecer",
     dismiss: "Dispensar marcador",
     draft: "Rascunho",
@@ -210,6 +212,7 @@ const copy = {
     needsContext: "Needs context",
     possibleDuplicate: "Possible duplicate",
     verifyTension: "Point to verify",
+    verifyConnection: "Connection to review",
     editToClarify: "Edit to clarify",
     dismiss: "Dismiss marker",
     draft: "Draft",
@@ -747,16 +750,9 @@ export function BrainstormLab({ language, project, onBoardChange }: Props) {
   }
 
   function arrangeLocally(source = cloneBoard(boardRef.current)) {
-    let arrangedNodes = source.nodes.map((node) => ({ ...node }));
-    let gaps = source.gaps;
-    if (source.settings.missionStructure) {
-      const structured = organizeLabIntoDomains(source, language);
-      arrangedNodes = structured.nodes;
-      gaps = structured.gaps;
-    } else for (let pass = 0; pass < 6; pass += 1) {
-      const working = { ...source, nodes: arrangedNodes };
-      arrangedNodes = computeGentleLabLayout(working, organizationSuggestionsFor(working));
-    }
+    const structured = source.settings.missionStructure ? organizeLabIntoDomains(source, language) : null;
+    const arrangedNodes = structured?.nodes ?? layoutLabTopDown(source);
+    const gaps = structured?.gaps ?? source.gaps;
     const next = appendLabAction(
       { ...source, nodes: arrangedNodes, gaps },
       createLabAction("ai-organized", "The map was arranged automatically with the available organization engine.", source.nodes.map((node) => node.id), "ai")
@@ -1459,22 +1455,6 @@ export function BrainstormLab({ language, project, onBoardChange }: Props) {
                 <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#ef7f8d" strokeWidth="1.5" />
               </marker>
             </defs>
-            {insights.filter((insight) => insight.kind === "tension" && insight.nodeIds.length >= 2).map((insight) => {
-              const first = board.nodes.find((node) => node.id === insight.nodeIds[0]);
-              const second = board.nodes.find((node) => node.id === insight.nodeIds[1]);
-              if (!first || !second) return null;
-              const path = relationPath(first, second);
-              const point = relationMidpoint(first, second);
-              const selected = selectedInsightId === insight.id;
-              return (
-                <g key={insight.id} className={`lab-tension-insight${selected ? " selected" : ""}`}>
-                  <path d={path} />
-                  <circle className="marker" cx={point.x} cy={point.y} r="10" />
-                  <text x={point.x} y={point.y + 3.5}>?</text>
-                  <circle className="hit" cx={point.x} cy={point.y} r="19" onPointerDown={(event) => { event.stopPropagation(); selectInsight(insight); }} />
-                </g>
-              );
-            })}
             {!board.settings.missionStructure && suggestions.map((suggestion) => {
               const from = board.nodes.find((node) => node.id === suggestion.from);
               const to = board.nodes.find((node) => node.id === suggestion.to);
@@ -1501,6 +1481,22 @@ export function BrainstormLab({ language, project, onBoardChange }: Props) {
                 </g>
               );
             })}
+            {insights.filter((insight) => (insight.kind === "tension" || insight.kind === "connection-warning") && insight.nodeIds.length >= 2).map((insight) => {
+              const first = board.nodes.find((node) => node.id === insight.nodeIds[0]);
+              const second = board.nodes.find((node) => node.id === insight.nodeIds[1]);
+              if (!first || !second) return null;
+              const path = relationPath(first, second);
+              const point = relationMidpoint(first, second);
+              const selected = selectedInsightId === insight.id;
+              return (
+                <g key={insight.id} className={`lab-tension-insight ${insight.kind}${selected ? " selected" : ""}`}>
+                  {insight.kind === "tension" && <path d={path} />}
+                  <circle className="marker" cx={point.x} cy={point.y} r="10" />
+                  <text x={point.x} y={point.y + 3.5}>?</text>
+                  <circle className="hit" cx={point.x} cy={point.y} r="19" onPointerDown={(event) => { event.stopPropagation(); selectInsight(insight); }} />
+                </g>
+              );
+            })}
             {connectionDraft && (
               <path
                 className={`lab-connection-preview${connectionDraft.invalid ? " invalid" : ""}`}
@@ -1510,20 +1506,22 @@ export function BrainstormLab({ language, project, onBoardChange }: Props) {
             )}
           </svg>
 
-          {board.settings.missionStructure && board.gaps.map((gap) => {
+          {board.gaps.map((gap) => {
             const point = labGapPoint(gap, board, domains);
             return <button
               type="button"
               className={`lab-gap${selectedGapId === gap.id ? " selected" : ""}`}
               style={{ left: point.x, top: point.y }}
+              aria-label={`${copy[language].missingLink}: ${gap.prompt}`}
+              title={gap.prompt}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => { setSelectedGapId(gap.id); setSelectedNodeId(null); setSelectedRelation(null); setSelectedInsightId(null); setCardMenuId(null); }}
               key={gap.id}
-            ><span>{copy[language].missingLink}</span><strong>{gap.prompt}</strong></button>;
+            >!</button>;
           })}
 
           {board.nodes.map((node) => {
-            const nodeInsight = insights.find((insight) => insight.nodeIds.includes(node.id) && insight.kind !== "tension");
+            const nodeInsight = insights.find((insight) => insight.nodeIds.includes(node.id) && (insight.kind === "needs-context" || insight.kind === "duplicate"));
             const nodeSuggestion = board.settings.missionStructure ? suggestions.find((suggestion) => suggestion.from === node.id || suggestion.to === node.id) : null;
             const connectionTarget = connectionDraft?.hoverNodeId === node.id;
             const stateClass = node.maturity === "decided" ? "defined" : node.maturity === "forming" ? "hypothesis" : "open";
@@ -1649,7 +1647,7 @@ export function BrainstormLab({ language, project, onBoardChange }: Props) {
         {selectedInsight && (
           <div className={`lab-insight-review ${selectedInsight.kind}`} data-control>
             <div className="lab-insight-copy">
-              <span>{selectedInsight.kind === "needs-context" ? copy[language].needsContext : selectedInsight.kind === "duplicate" ? copy[language].possibleDuplicate : copy[language].verifyTension}</span>
+              <span>{selectedInsight.kind === "needs-context" ? copy[language].needsContext : selectedInsight.kind === "duplicate" ? copy[language].possibleDuplicate : selectedInsight.kind === "connection-warning" ? copy[language].verifyConnection : copy[language].verifyTension}</span>
               <strong>{selectedInsight.title}</strong>
               <p>{selectedInsight.detail}</p>
               <em>{selectedInsight.question}</em>

@@ -1,3 +1,4 @@
+import { graphlib, layout } from "@dagrejs/dagre";
 import type { Language } from "./types";
 
 export type LabMaturity = "draft" | "forming" | "decided";
@@ -15,7 +16,7 @@ export type LabActionKind =
   | "ai-organized"
   | "undo"
   | "redo";
-export type LabInsightKind = "needs-context" | "duplicate" | "tension";
+export type LabInsightKind = "needs-context" | "duplicate" | "tension" | "connection-warning";
 export type LabDomainId =
   | "mission"
   | "payload"
@@ -487,15 +488,129 @@ export function organizeLabIntoDomains(
 }
 
 export function labGapPoint(gap: LabGap, board: LabBoard, domains: LabDomain[]): { x: number; y: number } {
-  const domain = domains.find((item) => item.id === gap.domainId);
-  if (domain) return { x: domain.x + domain.width / 2, y: domain.y + domain.height - 58 };
   const first = board.nodes.find((node) => node.id === gap.afterNodeId);
   const second = board.nodes.find((node) => node.id === gap.beforeNodeId);
   if (first && second) return {
     x: (first.x + second.x) / 2 + LAB_NODE_WIDTH / 2,
     y: (first.y + second.y) / 2 + LAB_NODE_HEIGHT + 26
   };
+  if (first || second) {
+    const node = first ?? second!;
+    return { x: node.x + LAB_NODE_WIDTH / 2, y: node.y + LAB_NODE_HEIGHT + 38 };
+  }
+  const domain = domains.find((item) => item.id === gap.domainId);
+  if (domain) return { x: domain.x + domain.width / 2, y: domain.y + domain.height - 58 };
   return { x: LAB_WORLD_WIDTH / 2, y: LAB_WORLD_HEIGHT / 2 };
+}
+
+export function layoutLabTopDown(board: LabBoard): LabNode[] {
+  if (board.nodes.length < 2) return board.nodes.map((node) => ({ ...node }));
+
+  const nodeById = new Map(board.nodes.map((node) => [node.id, node]));
+  const edgeKeys = new Set<string>();
+  const edges: Array<{ id: string; from: string; to: string; confirmed: boolean }> = [];
+  board.links.forEach((link) => {
+    if (!nodeById.has(link.from) || !nodeById.has(link.to) || link.from === link.to) return;
+    edgeKeys.add(`${link.from}>${link.to}`);
+    edges.push({ id: `confirmed:${link.id}`, from: link.from, to: link.to, confirmed: true });
+  });
+  board.nodes.forEach((node) => {
+    const parentId = node.hierarchyParentId;
+    if (!parentId || !nodeById.has(parentId) || parentId === node.id || edgeKeys.has(`${parentId}>${node.id}`)) return;
+    edgeKeys.add(`${parentId}>${node.id}`);
+    edges.push({ id: `hierarchy:${parentId}:${node.id}`, from: parentId, to: node.id, confirmed: false });
+  });
+
+  const componentGraph = new graphlib.Graph({ directed: true });
+  board.nodes.forEach((node) => componentGraph.setNode(node.id));
+  edges.forEach((edge) => componentGraph.setEdge(edge.from, edge.to));
+
+  const components = graphlib.alg.components(componentGraph)
+    .map((ids) => ids.filter((id) => nodeById.has(id)))
+    .filter((ids) => ids.length > 0)
+    .sort((first, second) => {
+      const firstEdges = edges.filter((edge) => first.includes(edge.from) && first.includes(edge.to)).length;
+      const secondEdges = edges.filter((edge) => second.includes(edge.from) && second.includes(edge.to)).length;
+      if (firstEdges !== secondEdges) return secondEdges - firstEdges;
+      const firstX = Math.min(...first.map((id) => nodeById.get(id)?.x ?? 0));
+      const secondX = Math.min(...second.map((id) => nodeById.get(id)?.x ?? 0));
+      return firstX - secondX;
+    });
+
+  const arranged = components.map((component) => {
+    const componentIds = new Set(component);
+    const graph = new graphlib.Graph({ directed: true, multigraph: true })
+      .setGraph({
+        rankdir: "TB",
+        ranker: "network-simplex",
+        acyclicer: "greedy",
+        rankalign: "center",
+        nodesep: 82,
+        edgesep: 34,
+        ranksep: 116,
+        marginx: 0,
+        marginy: 0
+      })
+      .setDefaultEdgeLabel(() => ({}));
+
+    component
+      .map((id) => nodeById.get(id))
+      .filter((node): node is LabNode => Boolean(node))
+      .sort((first, second) => first.x - second.x || first.createdAt.localeCompare(second.createdAt))
+      .forEach((node) => graph.setNode(node.id, { width: LAB_NODE_WIDTH, height: LAB_NODE_HEIGHT }));
+    edges
+      .filter((edge) => componentIds.has(edge.from) && componentIds.has(edge.to))
+      .forEach((edge) => graph.setEdge(edge.from, edge.to, { minlen: 1, weight: edge.confirmed ? 6 : 3 }, edge.id));
+
+    layout(graph);
+    const positions = component.map((id) => {
+      const position = graph.node(id) as { x: number; y: number };
+      return { id, x: position.x - LAB_NODE_WIDTH / 2, y: position.y - LAB_NODE_HEIGHT / 2 };
+    });
+    const minX = Math.min(...positions.map((position) => position.x));
+    const maxX = Math.max(...positions.map((position) => position.x + LAB_NODE_WIDTH));
+    const minY = Math.min(...positions.map((position) => position.y));
+    const maxY = Math.max(...positions.map((position) => position.y + LAB_NODE_HEIGHT));
+    return {
+      positions,
+      minX,
+      minY,
+      width: Math.max(LAB_NODE_WIDTH, maxX - minX),
+      height: Math.max(LAB_NODE_HEIGHT, maxY - minY)
+    };
+  });
+
+  const maxRowWidth = LAB_WORLD_WIDTH - 160;
+  const componentGap = 116;
+  const rowGap = 138;
+  const rows: typeof arranged[] = [];
+  arranged.forEach((component) => {
+    const row = rows.at(-1);
+    const rowWidth = row?.reduce((sum, item) => sum + item.width, 0) ?? 0;
+    const gapsWidth = row ? row.length * componentGap : 0;
+    if (!row || rowWidth + gapsWidth + component.width > maxRowWidth) rows.push([component]);
+    else row.push(component);
+  });
+
+  const nextById = new Map(board.nodes.map((node) => [node.id, { ...node }]));
+  let rowTop = 96;
+  rows.forEach((row) => {
+    const rowWidth = row.reduce((sum, component) => sum + component.width, 0) + Math.max(0, row.length - 1) * componentGap;
+    let left = Math.max(80, (LAB_WORLD_WIDTH - rowWidth) / 2);
+    const rowHeight = Math.max(...row.map((component) => component.height));
+    row.forEach((component) => {
+      component.positions.forEach((position) => {
+        const target = nextById.get(position.id);
+        if (!target) return;
+        target.x = clamp(left + position.x - component.minX, 40, LAB_WORLD_WIDTH - LAB_NODE_WIDTH - 40);
+        target.y = clamp(rowTop + position.y - component.minY, 40, LAB_WORLD_HEIGHT - LAB_NODE_HEIGHT - 40);
+      });
+      left += component.width + componentGap;
+    });
+    rowTop += rowHeight + rowGap;
+  });
+
+  return board.nodes.map((node) => nextById.get(node.id) ?? { ...node });
 }
 
 export function computeGentleLabLayout(board: LabBoard, suggestions = deriveLabSuggestions(board), focusNodeId?: string): LabNode[] {
@@ -688,7 +803,7 @@ function confirmedParentFor(board: LabBoard, nodeId: string, allowedIds: string[
   return board.links.find((link) => link.to === nodeId && allowed.has(link.from))?.from ?? "";
 }
 
-function buildLabGaps(board: LabBoard, plans: LabGapPlan[]): LabGap[] {
+export function buildLabGaps(board: LabBoard, plans: LabGapPlan[]): LabGap[] {
   const domains = new Map<LabDomainId, LabNode[]>();
   board.nodes.forEach((node) => {
     const domainId = isLabDomainId(node.domainId) ? node.domainId : classifyLabDomain(node.text);
@@ -811,7 +926,7 @@ function isLabInsight(value: unknown): value is LabInsight {
   if (!value || typeof value !== "object") return false;
   const insight = value as Partial<LabInsight>;
   return typeof insight.id === "string"
-    && (insight.kind === "needs-context" || insight.kind === "duplicate" || insight.kind === "tension")
+    && (insight.kind === "needs-context" || insight.kind === "duplicate" || insight.kind === "tension" || insight.kind === "connection-warning")
     && Array.isArray(insight.nodeIds)
     && typeof insight.title === "string"
     && typeof insight.detail === "string"

@@ -23,7 +23,8 @@ describe("AI brainstorm organization", () => {
         { nodeId: "camera", rewrittenText: "Usar câmera térmica", role: "approach", informationStatus: "enough", informationNeeded: "", duplicateOf: "", parentId: "goal", level: 1, order: 0, lane: "main" },
         { nodeId: "unclear", rewrittenText: "Avaliar uso de satélite", role: "unclassified", informationStatus: "partial", informationNeeded: "Definir objetivo e fonte de imagens.", duplicateOf: "", parentId: "", level: 0, order: 1, lane: "needs-context" }
       ],
-      tensions: [{ id: "ignored", first: "goal", second: "camera", title: "Energia", explanation: "Pode haver impacto no consumo.", question: "Qual é o orçamento de energia?", confidence: 0.7 }]
+      tensions: [{ id: "ignored", first: "goal", second: "camera", title: "Energia", explanation: "Pode haver impacto no consumo.", question: "Qual é o orçamento de energia?", confidence: 0.7 }],
+      connectionIssues: [{ from: "goal", to: "camera", title: "Premissa ausente", explanation: "A ligação pode precisar de uma condição intermediária.", question: "Qual requisito conecta o objetivo a esta abordagem?", confidence: 0.78 }]
     };
 
     const organized = applyBrainstormAiOrganization(board, analysis, "pt");
@@ -35,7 +36,7 @@ describe("AI brainstorm organization", () => {
     expect(camera.y).toBeGreaterThan(goal.y);
     expect(unclear.x).toBeGreaterThan(camera.x);
     expect(organized.links).toEqual(board.links);
-    expect(organized.insights.map((insight) => insight.kind).sort()).toEqual(["needs-context", "tension"]);
+    expect(organized.insights.map((insight) => insight.kind).sort()).toEqual(["connection-warning", "needs-context", "tension"]);
   });
 
   it("never creates a confirmed relation from an AI layout parent", () => {
@@ -50,7 +51,8 @@ describe("AI brainstorm organization", () => {
         { nodeId: "parent", rewrittenText: "Pai", role: "objective", informationStatus: "enough", informationNeeded: "", duplicateOf: "", parentId: "", level: 0, order: 0, lane: "main" },
         { nodeId: "child", rewrittenText: "Filho", role: "approach", informationStatus: "enough", informationNeeded: "", duplicateOf: "", parentId: "parent", level: 1, order: 0, lane: "main" }
       ],
-      tensions: []
+      tensions: [],
+      connectionIssues: []
     };
 
     expect(applyBrainstormAiOrganization(board, analysis, "pt").links).toHaveLength(0);
@@ -75,7 +77,8 @@ describe("AI brainstorm organization", () => {
         { nodeId: "first", rewrittenText: "Texto reescrito", role: "objective", informationStatus: "partial", informationNeeded: "Adicionar uma meta.", duplicateOf: "second", parentId: "", level: 0, order: 0, lane: "main" },
         { nodeId: "second", rewrittenText: "Outra ideia", role: "approach", informationStatus: "enough", informationNeeded: "", duplicateOf: "", parentId: "", level: 0, order: 1, lane: "main" }
       ],
-      tensions: [{ id: "tension", first: "first", second: "second", title: "Verificar", explanation: "Pode haver conflito.", question: "Confirmar?", confidence: 0.8 }]
+      tensions: [{ id: "tension", first: "first", second: "second", title: "Verificar", explanation: "Pode haver conflito.", question: "Confirmar?", confidence: 0.8 }],
+      connectionIssues: []
     };
 
     const organized = applyBrainstormAiOrganization(board, analysis, "pt");
