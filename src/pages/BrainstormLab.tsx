@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Focus, LayoutDashboard, Maximize2 } from "lucide-react";
 import { ApiError, useAuth } from "../lib/auth";
 import {
   brainstormAiRequestFingerprint,
@@ -8,6 +9,7 @@ import {
   normalizeBrainstormAiAnalysis
 } from "../lib/brainstormAi";
 import type { BrainstormAiAnalysis } from "../lib/brainstormAi";
+import { buildBrainstormMissionContext } from "../lib/brainstormMissionContext";
 import { applyBrainstormAiOrganization, brainstormAiInsights } from "../lib/brainstormAiLayout";
 import {
   LAB_NODE_HEIGHT,
@@ -15,24 +17,32 @@ import {
   LAB_WORLD_HEIGHT,
   LAB_WORLD_WIDTH,
   appendLabAction,
+  classifyLabDomain,
   computeGentleLabLayout,
   createLabAction,
   createLabLink,
   createLabNode,
+  deriveMissionDomains,
   deriveLabSuggestions,
+  labGapPoint,
   loadLabBoard,
+  normalizeLabBoard,
+  organizeLabIntoDomains,
   saveLabBoard
 } from "../lib/brainstormLab";
-import type { LabBoard, LabInsight, LabMaturity, LabNode, LabSettings, LabSuggestion } from "../lib/brainstormLab";
+import type { LabBoard, LabDomain, LabGap, LabInsight, LabMaturity, LabNode, LabSettings, LabSuggestion } from "../lib/brainstormLab";
+import type { MissionProject } from "../lib/projectStore";
+import type { TeamMember } from "../lib/team";
 import type { Language } from "../lib/types";
 
 type Props = {
   language: Language;
-  projectId: string;
+  project: MissionProject;
+  onBoardChange: (board: LabBoard) => void;
 };
 
 type Transform = { scale: number; x: number; y: number };
-type ComposerState = { x: number; y: number; text: string } | null;
+type ComposerState = { x: number; y: number; text: string; domainId?: LabNode["domainId"] } | null;
 type DragState = {
   id: string;
   pointerId: number;
@@ -77,6 +87,14 @@ const copy = {
     automatic: "Organização automática",
     autoShort: "Auto",
     arrangeMap: "Arrumar mapa",
+    structureMission: "Estruturar missão",
+    structureActive: "Estrutura ativa",
+    enterDomain: "Abrir área",
+    organizeDomain: "Organizar esta área",
+    missingLink: "LACUNA PARA EXPLORAR",
+    exploreGap: "Explorar agora",
+    decisionSent: "No sistema consolidado",
+    domainIdeas: "ideias",
     organizeWithAi: "Arrumar mapa",
     organizingWithAi: "Organizando...",
     organizedUndo: "Mapa organizado. Ctrl+Z desfaz toda a alteração.",
@@ -125,6 +143,8 @@ const copy = {
     rewriteIdeas: "Aprimorar o texto dos cartões",
     flagIncomplete: "Marcar ideias que precisam de contexto",
     flagDuplicates: "Marcar possíveis repetições",
+    missionStructure: "Organizar por áreas da missão",
+    semanticZoom: "Resumir áreas ao afastar o zoom",
     provisional: "GRUPO PROVISÓRIO",
     sharedContext: "Contexto compartilhado entre as ideias",
     questionContext: "Pergunta provavelmente ligada a esta ideia",
@@ -150,6 +170,14 @@ const copy = {
     automatic: "Automatic organization",
     autoShort: "Auto",
     arrangeMap: "Arrange map",
+    structureMission: "Structure mission",
+    structureActive: "Structure active",
+    enterDomain: "Open area",
+    organizeDomain: "Organize this area",
+    missingLink: "GAP TO EXPLORE",
+    exploreGap: "Explore now",
+    decisionSent: "In consolidated system",
+    domainIdeas: "ideas",
     organizeWithAi: "Arrange map",
     organizingWithAi: "Organizing...",
     organizedUndo: "Map organized. Ctrl+Z undoes the entire change.",
@@ -198,6 +226,8 @@ const copy = {
     rewriteIdeas: "Improve card wording",
     flagIncomplete: "Flag ideas that need context",
     flagDuplicates: "Flag possible duplicates",
+    missionStructure: "Organize by mission areas",
+    semanticZoom: "Summarize areas when zooming out",
     provisional: "PROVISIONAL GROUP",
     sharedContext: "Shared context between these ideas",
     questionContext: "Question probably connected to this idea",
@@ -221,8 +251,9 @@ const copy = {
   }
 } as const;
 
-export function BrainstormLab({ language, projectId }: Props) {
+export function BrainstormLab({ language, project, onBoardChange }: Props) {
   const auth = useAuth();
+  const projectId = project.id;
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -234,6 +265,8 @@ export function BrainstormLab({ language, projectId }: Props) {
   const connectionRef = useRef<ConnectionDraft>(null);
   const animationFrameRef = useRef<number | null>(null);
   const aiRequestVersionRef = useRef(0);
+  const onBoardChangeRef = useRef(onBoardChange);
+  const reportedBoardFingerprintRef = useRef("");
   const skipAutomaticOrganizationUntilRef = useRef(0);
   const historyRef = useRef<LabHistory>({ past: [], future: [] });
   const lastCanvasPointRef = useRef({ x: LAB_WORLD_WIDTH / 2, y: LAB_WORLD_HEIGHT / 2 });
@@ -261,9 +294,13 @@ export function BrainstormLab({ language, projectId }: Props) {
   const [aiOrganizing, setAiOrganizing] = useState(false);
   const [organizationNotice, setOrganizationNotice] = useState(false);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [selectedGapId, setSelectedGapId] = useState<string | null>(null);
   const animatedPrompt = useAnimatedPrompt(copy[language].prompts);
+  onBoardChangeRef.current = onBoardChange;
 
-  const aiRequest = useMemo(() => createBrainstormAiRequest(board, language), [board, language]);
+  const missionContext = useMemo(() => buildBrainstormMissionContext(project, teamMembers, language), [language, project, teamMembers]);
+  const aiRequest = useMemo(() => createBrainstormAiRequest(board, language, "analyze", missionContext), [board, language, missionContext]);
   const aiFingerprint = useMemo(() => brainstormAiRequestFingerprint(aiRequest), [aiRequest]);
   const activeAiAnalysis = aiAnalysisState?.fingerprint === aiFingerprint ? aiAnalysisState.analysis : null;
   const localSuggestions = useMemo(() => deriveLabSuggestions(board), [board]);
@@ -280,7 +317,9 @@ export function BrainstormLab({ language, projectId }: Props) {
     ? suggestions.find((suggestion) => suggestion.id === selectedRelation.id) ?? null
     : null;
   const selectedInsight = selectedInsightId ? insights.find((insight) => insight.id === selectedInsightId) ?? null : null;
-  const hasSelection = selectedNodeId !== null || selectedRelation !== null || selectedInsight !== null;
+  const domains = useMemo(() => board.settings.missionStructure ? deriveMissionDomains(board, language) : [], [board, language]);
+  const selectedGap = selectedGapId ? board.gaps.find((gap) => gap.id === selectedGapId) ?? null : null;
+  const hasSelection = selectedNodeId !== null || selectedRelation !== null || selectedInsight !== null || selectedGap !== null;
 
   function lockSelection() {
     document.body.classList.add("workspace-interacting");
@@ -310,8 +349,13 @@ export function BrainstormLab({ language, projectId }: Props) {
       dismissedInsightIds: [...source.dismissedInsightIds],
       teamMemory: source.teamMemory.map((action) => ({ ...action, nodeIds: [...action.nodeIds] })),
       insights: source.insights.map((insight) => ({ ...insight, nodeIds: [...insight.nodeIds] })),
+      gaps: source.gaps.map((gap) => ({ ...gap })),
       settings: { ...source.settings }
     };
+  }
+
+  function requestFor(source: LabBoard, intent: "analyze" | "organize" = "analyze", focusDomainId?: LabDomain["id"]) {
+    return createBrainstormAiRequest(source, language, intent, missionContext, focusDomainId);
   }
 
   function setHistory(next: LabHistory) {
@@ -333,12 +377,16 @@ export function BrainstormLab({ language, projectId }: Props) {
   }
 
   function organizationSuggestionsFor(source: LabBoard): LabSuggestion[] {
-    const sourceFingerprint = brainstormAiRequestFingerprint(createBrainstormAiRequest(source, language));
+    const sourceFingerprint = brainstormAiRequestFingerprint(requestFor(source));
     const matchingAnalysis = aiAnalysisState?.fingerprint === sourceFingerprint ? aiAnalysisState.analysis : null;
     return mergeBrainstormAiSuggestions(deriveLabSuggestions(source), matchingAnalysis, source);
   }
 
   function animateOrganization(source: LabBoard, focusNodeId?: string, providedSuggestions?: LabSuggestion[]) {
+    if (source.settings.missionStructure) {
+      animateBoardTransition(source, organizeLabIntoDomains(source, language), 820);
+      return;
+    }
     const targetNodes = computeGentleLabLayout(source, providedSuggestions ?? organizationSuggestionsFor(source), focusNodeId);
     animateBoardTransition(source, { ...source, nodes: targetNodes }, 760);
   }
@@ -422,6 +470,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     setSelectedNodeId(null);
     setSelectedRelation(null);
     setSelectedInsightId(null);
+    setSelectedGapId(null);
     setCardMenuId(null);
   }
 
@@ -439,13 +488,16 @@ export function BrainstormLab({ language, projectId }: Props) {
     return worldPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
-  function openComposer(point = lastCanvasPointRef.current, initialText = "") {
+  function openComposer(point = lastCanvasPointRef.current, initialText = "", requestedDomainId?: LabNode["domainId"]) {
     const nextPoint = {
       x: clamp(point.x, LAB_NODE_WIDTH / 2 + 28, LAB_WORLD_WIDTH - LAB_NODE_WIDTH / 2 - 28),
       y: clamp(point.y, LAB_NODE_HEIGHT / 2 + 28, LAB_WORLD_HEIGHT - LAB_NODE_HEIGHT / 2 - 28)
     };
     lastCanvasPointRef.current = nextPoint;
-    setComposer({ ...nextPoint, text: initialText });
+    const containingDomain = boardRef.current.settings.missionStructure
+      ? deriveMissionDomains(boardRef.current, language).find((domain) => pointInsideDomain(nextPoint, domain))
+      : null;
+    setComposer({ ...nextPoint, text: initialText, domainId: requestedDomainId ?? containingDomain?.id });
     setCardMenuId(null);
   }
 
@@ -458,11 +510,12 @@ export function BrainstormLab({ language, projectId }: Props) {
       clamp(composer.x - LAB_NODE_WIDTH / 2, 32, LAB_WORLD_WIDTH - LAB_NODE_WIDTH - 32),
       clamp(composer.y - LAB_NODE_HEIGHT / 2, 32, LAB_WORLD_HEIGHT - LAB_NODE_HEIGHT - 32)
     );
+    if (boardRef.current.settings.missionStructure) node.domainId = composer.domainId ?? classifyLabDomain(node.text);
     const next = appendLabAction(
       { ...boardRef.current, nodes: [...boardRef.current.nodes, node] },
       createLabAction("created", `The team created the idea: "${node.text}".`, [node.id])
     );
-    commitBoard(next, { organize: next.settings.autoOrganize, focusNodeId: node.id });
+    commitBoard(next, { organize: next.settings.autoOrganize || next.settings.missionStructure, focusNodeId: node.id });
     setSelectedNodeId(node.id);
     setSelectedRelation(null);
     setSelectedInsightId(null);
@@ -474,11 +527,20 @@ export function BrainstormLab({ language, projectId }: Props) {
       y: wrapped ? clamp(composer.y + LAB_NODE_HEIGHT + 52, 80, LAB_WORLD_HEIGHT - 80) : composer.y
     };
     lastCanvasPointRef.current = nextPoint;
-    setComposer({ ...nextPoint, text: "" });
+    setComposer({ ...nextPoint, text: "", domainId: composer.domainId });
   }
 
   function deleteSelection() {
     const current = boardRef.current;
+    if (selectedGap) {
+      commitBoard({
+        ...current,
+        gaps: current.gaps.filter((gap) => gap.id !== selectedGap.id),
+        dismissedInsightIds: [...new Set([...current.dismissedInsightIds, selectedGap.id])]
+      });
+      clearSelection();
+      return;
+    }
     if (selectedInsight) {
       dismissInsight(selectedInsight);
       clearSelection();
@@ -523,7 +585,7 @@ export function BrainstormLab({ language, projectId }: Props) {
         [suggestion.from, suggestion.to]
       )
     );
-    commitBoard(next, { organize: next.settings.autoOrganize });
+    commitBoard(next, { organize: next.settings.autoOrganize || next.settings.missionStructure });
     setSelectedRelation(null);
   }
 
@@ -543,10 +605,82 @@ export function BrainstormLab({ language, projectId }: Props) {
   }
 
   function updateSetting(key: keyof LabSettings, value: boolean) {
+    if (key === "missionStructure") {
+      setMissionStructure(value);
+      return;
+    }
     const current = boardRef.current;
     const next = { ...current, settings: { ...current.settings, [key]: value } };
     setOrganizationNotice(false);
     commitBoard(next, { organize: value && next.settings.autoOrganize });
+  }
+
+  function setMissionStructure(enabled: boolean) {
+    const current = cloneBoard(boardRef.current);
+    if (current.settings.missionStructure === enabled) {
+      if (enabled) arrangeMap();
+      return;
+    }
+    const configured = { ...current, settings: { ...current.settings, missionStructure: enabled }, gaps: enabled ? current.gaps : [] };
+    const next = enabled
+      ? organizeLabIntoDomains(configured, language)
+      : configured;
+    commitBoard(appendLabAction(
+      next,
+      createLabAction(
+        "ai-organized",
+        enabled ? "The team enabled mission-area organization." : "The team returned to the free canvas.",
+        current.nodes.map((node) => node.id),
+        "team"
+      )
+    ), { animateTarget: enabled });
+    setOrganizationNotice(enabled);
+    window.setTimeout(fitAll, enabled ? 900 : 0);
+  }
+
+  function focusDomain(domain: LabDomain) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const scale = clamp(Math.min((rect.width - 90) / domain.width, (rect.height - 100) / domain.height), 0.72, 1.12);
+    setTransform({
+      scale,
+      x: rect.width / 2 - (domain.x + domain.width / 2) * scale,
+      y: rect.height / 2 - (domain.y + domain.height / 2) * scale
+    });
+  }
+
+  function organizeDomain(domain: LabDomain) {
+    if (aiConfigured === true) {
+      void organizeWithAi(domain);
+      return;
+    }
+    const current = cloneBoard(boardRef.current);
+    const organized = organizeLabIntoDomains(current, language);
+    const domainNodeIds = new Set(domain.nodeIds);
+    const targetById = new Map(organized.nodes.map((node) => [node.id, node]));
+    const next = appendLabAction({
+      ...organized,
+      nodes: current.nodes.map((node) => domainNodeIds.has(node.id) ? targetById.get(node.id) ?? node : node)
+    }, createLabAction("ai-organized", `The team organized the mission area ${domain.id}.`, domain.nodeIds, "ai"));
+    commitBoard(next, { animateTarget: true });
+    window.setTimeout(() => focusDomain(domain), 880);
+  }
+
+  function exploreGap(gap: LabGap) {
+    const point = labGapPoint(gap, boardRef.current, deriveMissionDomains(boardRef.current, language));
+    setSelectedGapId(null);
+    openComposer(point, "", gap.domainId);
+  }
+
+  function dismissGap(gap: LabGap) {
+    const current = boardRef.current;
+    commitBoard(appendLabAction({
+      ...current,
+      gaps: current.gaps.filter((item) => item.id !== gap.id),
+      dismissedInsightIds: [...new Set([...current.dismissedInsightIds, gap.id])]
+    }, createLabAction("suggestion-rejected", `The team dismissed a missing-context prompt in ${gap.domainId}.`, [gap.afterNodeId, gap.beforeNodeId].filter(Boolean))));
+    setSelectedGapId(null);
   }
 
   function updateMaturity(nodeId: string, maturity: LabMaturity) {
@@ -565,7 +699,7 @@ export function BrainstormLab({ language, projectId }: Props) {
       { ...current, nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, pinned: false } : node) },
       createLabAction("moved", "The team allowed automatic adjustments to this idea position.", [nodeId])
     );
-    commitBoard(next, { organize: next.settings.autoOrganize, focusNodeId: nodeId });
+    commitBoard(next, { organize: next.settings.autoOrganize || next.settings.missionStructure, focusNodeId: nodeId });
     setCardMenuId(null);
   }
 
@@ -589,13 +723,14 @@ export function BrainstormLab({ language, projectId }: Props) {
       nodes: current.nodes.map((item) => item.id === node.id ? { ...item, text } : item),
       insights: current.insights.filter((insight) => !insight.nodeIds.includes(node.id))
     }, createLabAction("edited", `The team edited an idea from "${node.text}" to "${text}".`, [node.id]));
-    commitBoard(next, { organize: next.settings.autoOrganize, focusNodeId: node.id });
+    commitBoard(next, { organize: next.settings.autoOrganize || next.settings.missionStructure, focusNodeId: node.id });
   }
 
   function selectInsight(insight: LabInsight) {
     setSelectedInsightId(insight.id);
     setSelectedRelation(null);
     setCardMenuId(null);
+    setSelectedGapId(null);
     setSelectedNodeId(insight.nodeIds.length === 1 ? insight.nodeIds[0] : null);
   }
 
@@ -613,12 +748,17 @@ export function BrainstormLab({ language, projectId }: Props) {
 
   function arrangeLocally(source = cloneBoard(boardRef.current)) {
     let arrangedNodes = source.nodes.map((node) => ({ ...node }));
-    for (let pass = 0; pass < 6; pass += 1) {
+    let gaps = source.gaps;
+    if (source.settings.missionStructure) {
+      const structured = organizeLabIntoDomains(source, language);
+      arrangedNodes = structured.nodes;
+      gaps = structured.gaps;
+    } else for (let pass = 0; pass < 6; pass += 1) {
       const working = { ...source, nodes: arrangedNodes };
       arrangedNodes = computeGentleLabLayout(working, organizationSuggestionsFor(working));
     }
     const next = appendLabAction(
-      { ...source, nodes: arrangedNodes },
+      { ...source, nodes: arrangedNodes, gaps },
       createLabAction("ai-organized", "The map was arranged automatically with the available organization engine.", source.nodes.map((node) => node.id), "ai")
     );
     commitBoard(next, { animateTarget: true });
@@ -635,10 +775,10 @@ export function BrainstormLab({ language, projectId }: Props) {
     arrangeLocally();
   }
 
-  async function organizeWithAi() {
+  async function organizeWithAi(focusedDomain?: LabDomain) {
     if (aiConfigured !== true || aiOrganizing || boardRef.current.nodes.length < 2) return;
     const source = cloneBoard(boardRef.current);
-    const request = createBrainstormAiRequest(source, language, "organize");
+    const request = requestFor(source, "organize", focusedDomain?.id);
     const requestFingerprint = brainstormAiRequestFingerprint(request);
     const requestVersion = ++aiRequestVersionRef.current;
     setAiOrganizing(true);
@@ -651,12 +791,13 @@ export function BrainstormLab({ language, projectId }: Props) {
         body: JSON.stringify(request)
       });
       if (requestVersion !== aiRequestVersionRef.current) return;
-      const currentFingerprint = brainstormAiRequestFingerprint(createBrainstormAiRequest(boardRef.current, language, "organize"));
+      const currentFingerprint = brainstormAiRequestFingerprint(requestFor(boardRef.current, "organize", focusedDomain?.id));
       if (currentFingerprint !== requestFingerprint) return;
 
       const returnedModel = analysisModel(payload) ?? aiModel;
       const analysis = normalizeBrainstormAiAnalysis(payload, request, returnedModel);
-      const organized = applyBrainstormAiOrganization(source, analysis, language);
+      const fullOrganization = applyBrainstormAiOrganization(source, analysis, language);
+      const organized = focusedDomain ? applyFocusedDomainOrganization(source, fullOrganization, focusedDomain.id) : fullOrganization;
       const rewrittenCount = organized.nodes.filter((node) => source.nodes.find((item) => item.id === node.id)?.text !== node.text).length;
       const next = appendLabAction(
         organized,
@@ -670,13 +811,13 @@ export function BrainstormLab({ language, projectId }: Props) {
       skipAutomaticOrganizationUntilRef.current = Date.now() + 4_000;
       setAiModel(returnedModel);
       setAiAnalysisState({
-        fingerprint: brainstormAiRequestFingerprint(createBrainstormAiRequest(next, language)),
+        fingerprint: brainstormAiRequestFingerprint(requestFor(next)),
         analysis
       });
       commitBoard(next, { animateTarget: true });
       setAiPhase("ready");
       setOrganizationNotice(true);
-      window.setTimeout(fitAll, 920);
+      window.setTimeout(() => focusedDomain ? focusDomain(focusedDomain) : fitAll(), 920);
     } catch (error) {
       setAiPhase(error instanceof ApiError && error.status === 429 ? "quota" : "error");
       arrangeLocally(cloneBoard(boardRef.current));
@@ -709,6 +850,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     setSelectedNodeId(node.id);
     setSelectedRelation(null);
     setSelectedInsightId(null);
+    setSelectedGapId(null);
     setCardMenuId(null);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -735,6 +877,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     setSelectedNodeId(node.id);
     setSelectedRelation(null);
     setSelectedInsightId(null);
+    setSelectedGapId(null);
     setCardMenuId(null);
   }
 
@@ -807,7 +950,7 @@ export function BrainstormLab({ language, projectId }: Props) {
           { ...current, links: [...current.links, link] },
           createLabAction("connection-created", "The team created a connection without an AI suggestion.", [link.from, link.to])
         );
-        commitBoard(next, { organize: next.settings.autoOrganize });
+        commitBoard(next, { organize: next.settings.autoOrganize || next.settings.missionStructure });
         setSelectedRelation({ type: "confirmed", id: link.id });
         setSelectedNodeId(null);
       }
@@ -819,9 +962,21 @@ export function BrainstormLab({ language, projectId }: Props) {
 
     const drag = dragRef.current;
     if (drag?.pointerId === event.pointerId && drag.moved) {
-      const movedNode = boardRef.current.nodes.find((node) => node.id === drag.id);
+      let movedBoard = boardRef.current;
+      let movedNode = movedBoard.nodes.find((node) => node.id === drag.id);
+      if (movedNode && movedBoard.settings.missionStructure) {
+        const centerPoint = { x: movedNode.x + LAB_NODE_WIDTH / 2, y: movedNode.y + LAB_NODE_HEIGHT / 2 };
+        const droppedDomain = deriveMissionDomains(movedBoard, language).find((domain) => pointInsideDomain(centerPoint, domain));
+        if (droppedDomain && droppedDomain.id !== movedNode.domainId) {
+          movedBoard = {
+            ...movedBoard,
+            nodes: movedBoard.nodes.map((node) => node.id === movedNode?.id ? { ...node, domainId: droppedDomain.id, hierarchyParentId: undefined } : node)
+          };
+          movedNode = movedBoard.nodes.find((node) => node.id === drag.id);
+        }
+      }
       const next = appendLabAction(
-        boardRef.current,
+        movedBoard,
         createLabAction(
           "moved",
           `The team manually moved an idea from (${Math.round(drag.startX)}, ${Math.round(drag.startY)}) to (${Math.round(movedNode?.x ?? drag.startX)}, ${Math.round(movedNode?.y ?? drag.startY)}); this position is intentional evidence.`,
@@ -849,7 +1004,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect) return;
     const current = transformRef.current;
-    const nextScale = clamp(current.scale * (event.deltaY < 0 ? 1.08 : 0.92), 0.45, 1.6);
+    const nextScale = clamp(current.scale * (event.deltaY < 0 ? 1.08 : 0.92), 0.24, 1.6);
     const worldX = (event.clientX - rect.left - current.x) / current.scale;
     const worldY = (event.clientY - rect.top - current.y) / current.scale;
     setTransform({
@@ -864,7 +1019,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
     const current = transformRef.current;
-    const nextScale = clamp(current.scale * factor, 0.45, 1.6);
+    const nextScale = clamp(current.scale * factor, 0.24, 1.6);
     const worldX = (rect.width / 2 - current.x) / current.scale;
     const worldY = (rect.height / 2 - current.y) / current.scale;
     setTransform({ scale: nextScale, x: rect.width / 2 - worldX * nextScale, y: rect.height / 2 - worldY * nextScale });
@@ -880,13 +1035,14 @@ export function BrainstormLab({ language, projectId }: Props) {
       setTransform({ scale, x: rect.width / 2 - LAB_WORLD_WIDTH * scale / 2, y: rect.height / 2 - LAB_WORLD_HEIGHT * scale / 2 });
       return;
     }
-    const minX = Math.min(...currentNodes.map((node) => node.x));
-    const minY = Math.min(...currentNodes.map((node) => node.y));
-    const maxX = Math.max(...currentNodes.map((node) => node.x + LAB_NODE_WIDTH));
-    const maxY = Math.max(...currentNodes.map((node) => node.y + LAB_NODE_HEIGHT));
+    const currentDomains = boardRef.current.settings.missionStructure ? deriveMissionDomains(boardRef.current, language) : [];
+    const minX = Math.min(...currentNodes.map((node) => node.x), ...currentDomains.map((domain) => domain.x));
+    const minY = Math.min(...currentNodes.map((node) => node.y), ...currentDomains.map((domain) => domain.y));
+    const maxX = Math.max(...currentNodes.map((node) => node.x + LAB_NODE_WIDTH), ...currentDomains.map((domain) => domain.x + domain.width));
+    const maxY = Math.max(...currentNodes.map((node) => node.y + LAB_NODE_HEIGHT), ...currentDomains.map((domain) => domain.y + domain.height));
     const width = Math.max(420, maxX - minX);
     const height = Math.max(260, maxY - minY);
-    const scale = clamp(Math.min((rect.width - 180) / width, (rect.height - 160) / height), 0.48, 1.12);
+    const scale = clamp(Math.min((rect.width - 180) / width, (rect.height - 160) / height), 0.28, 1.12);
     setTransform({ scale, x: rect.width / 2 - (minX + width / 2) * scale, y: rect.height / 2 - (minY + height / 2) * scale });
   }
 
@@ -932,6 +1088,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     setOrganizationNotice(false);
     setOrganizationSettingsOpen(false);
     setAiAnalysisState(null);
+    reportedBoardFingerprintRef.current = "";
   }, [projectId]);
 
   useEffect(() => {
@@ -942,8 +1099,9 @@ export function BrainstormLab({ language, projectId }: Props) {
       .then(async ({ board: remoteBoard }) => {
         if (cancelled) return;
         if (remoteBoard?.schemaVersion === 1 && Array.isArray(remoteBoard.nodes) && Array.isArray(remoteBoard.links)) {
-          saveLabBoard(projectId, remoteBoard);
-          setLiveBoard(remoteBoard);
+          const normalized = normalizeLabBoard(remoteBoard);
+          saveLabBoard(projectId, normalized);
+          setLiveBoard(normalized);
         } else if (localBoard.nodes.length > 0 || localBoard.links.length > 0) {
           await auth.api(`/workspace/labs/${encodeURIComponent(projectId)}`, { method: "PUT", body: JSON.stringify(localBoard) });
         }
@@ -956,6 +1114,31 @@ export function BrainstormLab({ language, projectId }: Props) {
       cancelled = true;
     };
   }, [auth.api, projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void auth.api<{ members: TeamMember[] }>("/team/members")
+      .then(({ members }) => {
+        if (!cancelled) setTeamMembers(members);
+      })
+      .catch(() => {
+        if (!cancelled) setTeamMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.api, project.context.teamId]);
+
+  useEffect(() => {
+    if (!remoteReady) return;
+    const fingerprint = JSON.stringify({
+      nodes: board.nodes.map((node) => ({ id: node.id, text: node.text, maturity: node.maturity, domainId: node.domainId })),
+      links: board.links.map((link) => ({ id: link.id, from: link.from, to: link.to }))
+    });
+    if (reportedBoardFingerprintRef.current === fingerprint) return;
+    reportedBoardFingerprintRef.current = fingerprint;
+    onBoardChangeRef.current(board);
+  }, [board, remoteReady]);
 
   useEffect(() => {
     if (!organizationSettingsOpen) return;
@@ -1001,7 +1184,7 @@ export function BrainstormLab({ language, projectId }: Props) {
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       const requestVersion = ++aiRequestVersionRef.current;
-      const request = createBrainstormAiRequest(boardRef.current, language);
+      const request = requestFor(boardRef.current);
       const requestFingerprint = brainstormAiRequestFingerprint(request);
       if (requestFingerprint !== aiFingerprint) return;
       setAiPhase("analyzing");
@@ -1018,7 +1201,7 @@ export function BrainstormLab({ language, projectId }: Props) {
         const analysis = normalizeBrainstormAiAnalysis(payload, request, returnedModel);
         if (controller.signal.aborted) return;
         const current = boardRef.current;
-        const currentFingerprint = brainstormAiRequestFingerprint(createBrainstormAiRequest(current, language));
+        const currentFingerprint = brainstormAiRequestFingerprint(requestFor(current));
         if (currentFingerprint !== requestFingerprint) return;
         setAiModel(returnedModel);
         setAiAnalysisState({ fingerprint: requestFingerprint, analysis });
@@ -1086,6 +1269,10 @@ export function BrainstormLab({ language, projectId }: Props) {
   }, [insights, selectedInsightId]);
 
   useEffect(() => {
+    if (selectedGapId && !board.gaps.some((gap) => gap.id === selectedGapId)) setSelectedGapId(null);
+  }, [board.gaps, selectedGapId]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const commandKey = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -1151,10 +1338,17 @@ export function BrainstormLab({ language, projectId }: Props) {
             {aiOrganizing || organizing ? copy[language].organizingWithAi : copy[language].arrangeMap}
           </button>
           <button
+            className={`lab-structure-button${board.settings.missionStructure ? " active" : ""}`}
+            aria-pressed={board.settings.missionStructure}
+            title={board.settings.missionStructure ? copy[language].structureActive : copy[language].structureMission}
+            disabled={board.nodes.length === 0 || aiOrganizing || organizing}
+            onClick={() => setMissionStructure(!board.settings.missionStructure)}
+          ><LayoutDashboard aria-hidden="true" />{copy[language].structureMission}</button>
+          <button
             className="primary shortcut-button"
             data-shortcut="Ctrl+N"
             title={`${copy[language].newIdea} (Ctrl+N)`}
-            onClick={() => openComposer(visibleCenter())}
+            onClick={() => openComposer()}
           >{copy[language].newIdea}</button>
           <button
             className="danger shortcut-button"
@@ -1220,7 +1414,7 @@ export function BrainstormLab({ language, projectId }: Props) {
 
       <div
         ref={viewportRef}
-        className={`lab-canvas${panning ? " panning" : ""}`}
+        className={`lab-canvas${panning ? " panning" : ""}${board.settings.missionStructure ? " structured" : ""}${board.settings.missionStructure && board.settings.semanticZoom && transform.scale < 0.56 ? " semantic-overview" : ""}`}
         onPointerDown={startCanvasPan}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -1229,13 +1423,30 @@ export function BrainstormLab({ language, projectId }: Props) {
         onWheel={handleWheel}
       >
         {board.nodes.length === 0 && !composer && (
-          <button className="lab-empty-prompt" onClick={() => openComposer(visibleCenter())} aria-label={copy[language].newIdea}>
+          <button className="lab-empty-prompt" data-control onClick={() => openComposer()} aria-label={copy[language].newIdea}>
             <span className="lab-empty-plus" aria-hidden="true">+</span>
             <strong>{animatedPrompt}<i aria-hidden="true" /></strong>
           </button>
         )}
 
         <div className="lab-world" style={{ width: LAB_WORLD_WIDTH, height: LAB_WORLD_HEIGHT, transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
+          {domains.map((domain) => (
+            <section
+              className={`lab-domain domain-${domain.id}`}
+              style={{ left: domain.x, top: domain.y, width: domain.width, height: domain.height }}
+              data-domain-id={domain.id}
+              key={domain.id}
+            >
+              <header>
+                <span><small>{language === "pt" ? "ÁREA DA MISSÃO" : "MISSION AREA"}</small><strong>{domain.label}</strong></span>
+                <em>{domain.nodeIds.length} {copy[language].domainIdeas}</em>
+                <div data-control>
+                  <button type="button" title={copy[language].enterDomain} aria-label={`${copy[language].enterDomain}: ${domain.label}`} onClick={() => focusDomain(domain)}><Maximize2 aria-hidden="true" /></button>
+                  <button type="button" title={copy[language].organizeDomain} aria-label={`${copy[language].organizeDomain}: ${domain.label}`} onClick={() => organizeDomain(domain)}><Focus aria-hidden="true" /></button>
+                </div>
+              </header>
+            </section>
+          ))}
           <svg className="lab-relations" width={LAB_WORLD_WIDTH} height={LAB_WORLD_HEIGHT} aria-hidden="true">
             <defs>
               <marker id="lab-arrow-confirmed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -1264,7 +1475,7 @@ export function BrainstormLab({ language, projectId }: Props) {
                 </g>
               );
             })}
-            {suggestions.map((suggestion) => {
+            {!board.settings.missionStructure && suggestions.map((suggestion) => {
               const from = board.nodes.find((node) => node.id === suggestion.from);
               const to = board.nodes.find((node) => node.id === suggestion.to);
               if (!from || !to) return null;
@@ -1273,7 +1484,7 @@ export function BrainstormLab({ language, projectId }: Props) {
               return (
                 <g key={suggestion.id} className={`lab-relation-group suggestion ${suggestion.kind}${suggestion.source === "gemini" ? " ai" : ""}${selected ? " selected" : ""}`}>
                   <path className="lab-relation-visible" d={path} markerEnd="url(#lab-arrow-suggested)" />
-                  <path className="lab-relation-hit" d={path} onPointerDown={(event) => { event.stopPropagation(); setSelectedRelation({ type: "suggestion", id: suggestion.id }); setSelectedNodeId(null); setSelectedInsightId(null); setCardMenuId(null); }} />
+                  <path className="lab-relation-hit" d={path} onPointerDown={(event) => { event.stopPropagation(); setSelectedRelation({ type: "suggestion", id: suggestion.id }); setSelectedNodeId(null); setSelectedInsightId(null); setSelectedGapId(null); setCardMenuId(null); }} />
                 </g>
               );
             })}
@@ -1286,7 +1497,7 @@ export function BrainstormLab({ language, projectId }: Props) {
               return (
                 <g key={link.id} className={`lab-relation-group confirmed${selected ? " selected" : ""}`}>
                   <path className="lab-relation-visible" d={path} markerEnd="url(#lab-arrow-confirmed)" />
-                  <path className="lab-relation-hit" d={path} onPointerDown={(event) => { event.stopPropagation(); setSelectedRelation({ type: "confirmed", id: link.id }); setSelectedNodeId(null); setSelectedInsightId(null); setCardMenuId(null); }} />
+                  <path className="lab-relation-hit" d={path} onPointerDown={(event) => { event.stopPropagation(); setSelectedRelation({ type: "confirmed", id: link.id }); setSelectedNodeId(null); setSelectedInsightId(null); setSelectedGapId(null); setCardMenuId(null); }} />
                 </g>
               );
             })}
@@ -1299,8 +1510,21 @@ export function BrainstormLab({ language, projectId }: Props) {
             )}
           </svg>
 
+          {board.settings.missionStructure && board.gaps.map((gap) => {
+            const point = labGapPoint(gap, board, domains);
+            return <button
+              type="button"
+              className={`lab-gap${selectedGapId === gap.id ? " selected" : ""}`}
+              style={{ left: point.x, top: point.y }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => { setSelectedGapId(gap.id); setSelectedNodeId(null); setSelectedRelation(null); setSelectedInsightId(null); setCardMenuId(null); }}
+              key={gap.id}
+            ><span>{copy[language].missingLink}</span><strong>{gap.prompt}</strong></button>;
+          })}
+
           {board.nodes.map((node) => {
             const nodeInsight = insights.find((insight) => insight.nodeIds.includes(node.id) && insight.kind !== "tension");
+            const nodeSuggestion = board.settings.missionStructure ? suggestions.find((suggestion) => suggestion.from === node.id || suggestion.to === node.id) : null;
             const connectionTarget = connectionDraft?.hoverNodeId === node.id;
             const stateClass = node.maturity === "decided" ? "defined" : node.maturity === "forming" ? "hypothesis" : "open";
             return (
@@ -1317,6 +1541,7 @@ export function BrainstormLab({ language, projectId }: Props) {
                 </div>
                 <div className="lab-node-text mission-node-title">{node.text}</div>
                 <div className="lab-node-state mission-node-state"><i />{copy[language][node.maturity]}</div>
+                {node.maturity === "decided" && <span className="lab-decision-sync">{copy[language].decisionSent}</span>}
                 {nodeInsight && (
                   <button
                     className={`lab-node-insight ${nodeInsight.kind}`}
@@ -1325,6 +1550,15 @@ export function BrainstormLab({ language, projectId }: Props) {
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => selectInsight(nodeInsight)}
                   >{nodeInsight.kind === "duplicate" ? "=" : "?"}</button>
+                )}
+                {nodeSuggestion && (
+                  <button
+                    className={`lab-node-suggestion ${nodeSuggestion.kind}`}
+                    aria-label={copy[language].relationSuggested}
+                    title={copy[language].relationSuggested}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => { setSelectedRelation({ type: "suggestion", id: nodeSuggestion.id }); setSelectedNodeId(null); setSelectedInsightId(null); setSelectedGapId(null); setCardMenuId(null); }}
+                  >↗</button>
                 )}
                 {selectedNodeId === node.id && !connectionDraft && (["top", "right", "bottom", "left"] as ConnectionSide[]).map((side) => (
                   <button
@@ -1426,6 +1660,18 @@ export function BrainstormLab({ language, projectId }: Props) {
           </div>
         )}
 
+        {selectedGap && (
+          <div className="lab-insight-review lab-gap-review" data-control>
+            <div className="lab-insight-copy">
+              <span>{copy[language].missingLink}</span>
+              <strong>{selectedGap.prompt}</strong>
+            </div>
+            <button onClick={() => exploreGap(selectedGap)}>{copy[language].exploreGap}</button>
+            <button onClick={() => dismissGap(selectedGap)}>{copy[language].dismiss}</button>
+            <button className="icon" aria-label={copy[language].close} title={copy[language].close} onClick={() => setSelectedGapId(null)}>×</button>
+          </div>
+        )}
+
         <div className="zoom-toolbar lab-zoom-strip" data-control>
           <button aria-label={copy[language].undo} title={`${copy[language].undo} (Ctrl+Z)`} disabled={!historyAvailability.canUndo} onClick={undo}>↶</button>
           <button aria-label={copy[language].redo} title={`${copy[language].redo} (Ctrl+Shift+Z)`} disabled={!historyAvailability.canRedo} onClick={redo}>↷</button>
@@ -1489,6 +1735,8 @@ function organizationSettingSections(language: Language): Array<{
     {
       label: copy[language].mapAdjustments,
       settings: [
+        { key: "missionStructure", label: copy[language].missionStructure },
+        { key: "semanticZoom", label: copy[language].semanticZoom },
         { key: "semanticProximity", label: copy[language].semanticProximity },
         { key: "separateAlternatives", label: copy[language].separateAlternatives },
         { key: "placeQuestions", label: copy[language].placeQuestions },
@@ -1609,6 +1857,23 @@ function relationPairId(firstId: string, secondId: string): string {
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function pointInsideDomain(point: { x: number; y: number }, domain: LabDomain): boolean {
+  return point.x >= domain.x && point.x <= domain.x + domain.width && point.y >= domain.y && point.y <= domain.y + domain.height;
+}
+
+function applyFocusedDomainOrganization(source: LabBoard, organized: LabBoard, domainId: LabDomain["id"]): LabBoard {
+  const organizedById = new Map(organized.nodes.map((node) => [node.id, node]));
+  const focusedNodeIds = new Set(organized.nodes.filter((node) => node.domainId === domainId).map((node) => node.id));
+  return {
+    ...organized,
+    nodes: source.nodes.map((node) => focusedNodeIds.has(node.id) ? organizedById.get(node.id) ?? node : node),
+    gaps: [
+      ...source.gaps.filter((gap) => gap.domainId !== domainId),
+      ...organized.gaps.filter((gap) => gap.domainId === domainId)
+    ]
+  };
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

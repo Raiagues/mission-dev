@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, Lightbulb, Network } from "lucide-react";
 import { Brand } from "../components/Brand";
+import { ConceptionTimeline } from "../components/ConceptionTimeline";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { UserBadge } from "../components/UserBadge";
 import { BrainstormLab } from "./BrainstormLab";
+import { loadLabBoard } from "../lib/brainstormLab";
+import type { LabBoard } from "../lib/brainstormLab";
 import { boardsEqual, cloneBoardSnapshot, createBoardHistory, recordBoardSnapshot, redoBoardChange, undoBoardChange } from "../lib/boardHistory";
 import type { BoardSnapshot } from "../lib/boardHistory";
+import { syncDecisionsToMissionBoard } from "../lib/conceptionSync";
 import { countWords, layoutTopDown, limitWords, MAX_CARD_WORDS, orderLinksTopDown } from "../lib/missionModel";
 import type { MissionProject } from "../lib/projectStore";
 import type { Language, MissionLink, MissionNode, NodeState } from "../lib/types";
@@ -59,6 +64,7 @@ type NodePort = { key: string; linkId: number | null; role: LinkRole | "new"; si
 type LinkEndpoint = { link: MissionLink; role: LinkRole; otherNode: MissionNode };
 type PortInsertion = { linkId: number; role: LinkRole; side: AnchorSide; index: number };
 type UpdateBoardOptions = { recordHistory?: boolean };
+type WorkspaceMode = "timeline" | "lab" | "map";
 
 const WORLD_WIDTH = 2600;
 const WORLD_HEIGHT = 1600;
@@ -82,7 +88,16 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
   const boardHistoryRef = useRef(createBoardHistory());
   const historyProjectIdRef = useRef(project.id);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [workspaceMode, setWorkspaceMode] = useState<"map" | "lab">(() => new URLSearchParams(window.location.search).get("view") === "exploration" ? "lab" : "map");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => {
+    const requested = new URLSearchParams(window.location.search).get("view");
+    if (requested === "timeline") return "timeline";
+    if (requested === "system" || requested === "map") return "map";
+    return "lab";
+  });
+  const [labSummary, setLabSummary] = useState(() => {
+    const lab = loadLabBoard(project.id);
+    return { ideas: lab.nodes.length, decisions: lab.nodes.filter((node) => node.maturity === "decided").length };
+  });
   const [transform, setTransform] = useState<Transform>({ scale: 0.72, x: -80, y: -35 });
   const [panning, setPanning] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(() => new Set());
@@ -117,6 +132,8 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     if (historyProjectIdRef.current === project.id) return;
     historyProjectIdRef.current = project.id;
     setBoardHistory(createBoardHistory());
+    const lab = loadLabBoard(project.id);
+    setLabSummary({ ideas: lab.nodes.length, decisions: lab.nodes.filter((node) => node.maturity === "decided").length });
     clearBoardSelection();
   }, [project.id]);
 
@@ -957,11 +974,30 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
     setCardModalOpen(false);
   }
 
-  function changeWorkspaceMode(mode: "map" | "lab") {
+  function changeWorkspaceMode(mode: WorkspaceMode) {
     setWorkspaceMode(mode);
     setCardModalOpen(false);
     clearBoardSelection();
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", mode === "map" ? "system" : mode === "lab" ? "discovery" : "timeline");
+    window.history.replaceState(window.history.state, "", url);
   }
+
+  function syncExplorationBoard(labBoard: LabBoard) {
+    const decidedNodes = labBoard.nodes.filter((node) => node.maturity === "decided");
+    setLabSummary({ ideas: labBoard.nodes.length, decisions: decidedNodes.length });
+    const currentProject = projectRef.current;
+    const currentBoard = currentProject.board;
+    const nextBoard = syncDecisionsToMissionBoard(currentBoard, labBoard, language);
+    if (boardsEqual(currentBoard, nextBoard)) return;
+    updateProject({ board: nextBoard });
+  }
+
+  useEffect(() => {
+    if (workspaceMode !== "map") return;
+    const frame = window.requestAnimationFrame(() => fitAll());
+    return () => window.cancelAnimationFrame(frame);
+  }, [project.id, nodes.length, workspaceMode]);
 
   useEffect(() => {
     function handleWindowKeyDown(event: KeyboardEvent) {
@@ -1033,7 +1069,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
         <header className="brain-topbar">
           <div className="brain-top-left">
             <button className="mobile-menu" onClick={() => setSidebarOpen(true)}>☰</button>
-            <div className="brain-breadcrumb"><span>{project.name}</span><span>›</span><strong>{t("brainstorm.problem")}</strong></div>
+            <div className="brain-breadcrumb"><span>{project.name}</span><span>›</span><strong>{language === "pt" ? "Concepção" : "Conception"}</strong></div>
           </div>
           <div className="brain-top-actions"><LanguageToggle language={language} onChange={onLanguageChange} /><UserBadge connectedLabel={t("common.connected")} /></div>
         </header>
@@ -1043,8 +1079,9 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
             <div className="brain-title-stack">
               <div className="brain-title"><h1>{ux(language, "conceptionRoom")}</h1></div>
               <div className="brain-mode-tabs" role="tablist" aria-label={ux(language, "conceptionRoom")}>
-                <button role="tab" aria-selected={workspaceMode === "map"} className={workspaceMode === "map" ? "active" : ""} onClick={() => changeWorkspaceMode("map")}>{language === "pt" ? "Mapa guiado" : "Guided map"}</button>
-                <button role="tab" aria-selected={workspaceMode === "lab"} className={workspaceMode === "lab" ? "active" : ""} onClick={() => changeWorkspaceMode("lab")}>{language === "pt" ? "Exploração" : "Exploration"}<em>{language === "pt" ? "TESTE" : "LAB"}</em></button>
+                <button role="tab" aria-selected={workspaceMode === "timeline"} className={workspaceMode === "timeline" ? "active" : ""} onClick={() => changeWorkspaceMode("timeline")}><CalendarDays aria-hidden="true" />{language === "pt" ? "Cronograma" : "Timeline"}</button>
+                <button role="tab" aria-selected={workspaceMode === "lab"} className={workspaceMode === "lab" ? "active" : ""} onClick={() => changeWorkspaceMode("lab")}><Lightbulb aria-hidden="true" />{language === "pt" ? "Descoberta" : "Discovery"}<em>BETA</em><span className="tab-count">{labSummary.ideas}</span></button>
+                <button role="tab" aria-selected={workspaceMode === "map"} className={workspaceMode === "map" ? "active" : ""} onClick={() => changeWorkspaceMode("map")}><Network aria-hidden="true" />{language === "pt" ? "Sistema consolidado" : "Consolidated system"}<span className="tab-count">{labSummary.decisions}</span></button>
               </div>
             </div>
             {workspaceMode === "map" && (
@@ -1057,7 +1094,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
             {workspaceMode === "lab" && <div id="brainstorm-lab-toolbar" className="brain-toolbar" data-control />}
           </div>
 
-          {workspaceMode === "map" ? <div ref={viewportRef} className={`mission-canvas${panning ? " panning" : ""}${selectionMode ? " selecting" : ""}`} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
+          {workspaceMode === "timeline" ? <ConceptionTimeline language={language} project={project} explorationCount={labSummary.ideas} decisionCount={labSummary.decisions} /> : workspaceMode === "map" ? <div ref={viewportRef} className={`mission-canvas${panning ? " panning" : ""}${selectionMode ? " selecting" : ""}`} onPointerDown={startPan} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={onWheel}>
             <div className="canvas-world" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`, width: WORLD_WIDTH, height: WORLD_HEIGHT }}>
               <div className="bucket-guide ideas"><span>{ux(language, "freeIdeas")}</span></div>
               <div className="bucket-guide questions"><span>{ux(language, "openQuestions")}</span></div>
@@ -1188,7 +1225,7 @@ export function BrainstormPage({ language, project, t, onLanguageChange, onProje
               <button aria-label={ux(language, "zoomIn")} title={ux(language, "zoomIn")} onClick={() => zoomBy(1.1)}>+</button>
               <button aria-label={ux(language, "fit")} title={ux(language, "fit")} onClick={fitAll}>⌂</button>
             </div>
-          </div> : <BrainstormLab language={language} projectId={project.id} />}
+          </div> : <BrainstormLab language={language} project={project} onBoardChange={syncExplorationBoard} />}
 
           <footer className="brain-footer">
             {workspaceMode === "lab" && <output id="brainstorm-lab-status" className="brain-lab-page-status" />}

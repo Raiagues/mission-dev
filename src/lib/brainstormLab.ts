@@ -16,6 +16,16 @@ export type LabActionKind =
   | "undo"
   | "redo";
 export type LabInsightKind = "needs-context" | "duplicate" | "tension";
+export type LabDomainId =
+  | "mission"
+  | "payload"
+  | "environment"
+  | "electronics"
+  | "communications"
+  | "software"
+  | "structure"
+  | "operations"
+  | "unassigned";
 
 export type LabNode = {
   id: string;
@@ -25,6 +35,8 @@ export type LabNode = {
   pinned: boolean;
   maturity: LabMaturity;
   createdAt: string;
+  domainId?: LabDomainId;
+  hierarchyParentId?: string;
 };
 
 export type LabLink = {
@@ -46,6 +58,8 @@ export type LabSettings = {
   rewriteIdeas: boolean;
   flagIncomplete: boolean;
   flagDuplicates: boolean;
+  missionStructure: boolean;
+  semanticZoom: boolean;
 };
 
 export type LabTeamAction = {
@@ -68,6 +82,15 @@ export type LabInsight = {
   updatedAt: string;
 };
 
+export type LabGap = {
+  id: string;
+  domainId: LabDomainId;
+  afterNodeId: string;
+  beforeNodeId: string;
+  prompt: string;
+  source: "local" | "gemini";
+};
+
 export type LabBoard = {
   schemaVersion: 1;
   nodes: LabNode[];
@@ -76,6 +99,7 @@ export type LabBoard = {
   dismissedInsightIds: string[];
   teamMemory: LabTeamAction[];
   insights: LabInsight[];
+  gaps: LabGap[];
   settings: LabSettings;
 };
 
@@ -97,10 +121,68 @@ export type LabGroup = {
   source?: "local" | "gemini";
 };
 
+export type LabDomain = {
+  id: LabDomainId;
+  label: string;
+  nodeIds: string[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type LabNodeOrganization = {
+  nodeId: string;
+  domainId?: LabDomainId;
+  parentId?: string;
+  level?: number;
+  order?: number;
+};
+
+export type LabGapPlan = {
+  domainId: LabDomainId;
+  afterNodeId?: string;
+  beforeNodeId?: string;
+  prompt: string;
+  source?: "local" | "gemini";
+};
+
 export const LAB_NODE_WIDTH = 240;
 export const LAB_NODE_HEIGHT = 158;
-export const LAB_WORLD_WIDTH = 2400;
-export const LAB_WORLD_HEIGHT = 1400;
+export const LAB_WORLD_WIDTH = 3200;
+export const LAB_WORLD_HEIGHT = 2300;
+
+const LAB_DOMAIN_WIDTH = 900;
+const LAB_DOMAIN_MIN_HEIGHT = 450;
+const LAB_DOMAIN_X_GAP = 74;
+const LAB_DOMAIN_Y_GAP = 82;
+const LAB_DOMAIN_LEFT = 82;
+const LAB_DOMAIN_TOP = 82;
+const LAB_DOMAIN_COLUMNS = 3;
+
+const DOMAIN_ORDER: LabDomainId[] = [
+  "mission",
+  "payload",
+  "environment",
+  "electronics",
+  "communications",
+  "software",
+  "structure",
+  "operations",
+  "unassigned"
+];
+
+const DOMAIN_LABELS: Record<LabDomainId, Record<Language, string>> = {
+  mission: { pt: "Missão e problema", en: "Mission and problem" },
+  payload: { pt: "Carga útil e dados", en: "Payload and data" },
+  environment: { pt: "Ambiente e órbita", en: "Environment and orbit" },
+  electronics: { pt: "Eletrônica e energia", en: "Electronics and power" },
+  communications: { pt: "Comunicação", en: "Communications" },
+  software: { pt: "Software", en: "Software" },
+  structure: { pt: "Estrutura e térmica", en: "Structure and thermal" },
+  operations: { pt: "Operação e validação", en: "Operations and validation" },
+  unassigned: { pt: "A explorar", en: "To explore" }
+};
 
 const STORAGE_PREFIX = "norte-brainstorm-lab-v1";
 const LEGACY_STORAGE_PREFIX = "mission-dev-brainstorm-lab-v1";
@@ -135,7 +217,9 @@ export const DEFAULT_LAB_SETTINGS: LabSettings = {
   stabilizeMature: true,
   rewriteIdeas: true,
   flagIncomplete: true,
-  flagDuplicates: true
+  flagDuplicates: true,
+  missionStructure: false,
+  semanticZoom: true
 };
 
 export function createEmptyLabBoard(): LabBoard {
@@ -147,6 +231,7 @@ export function createEmptyLabBoard(): LabBoard {
     dismissedInsightIds: [],
     teamMemory: [],
     insights: [],
+    gaps: [],
     settings: { ...DEFAULT_LAB_SETTINGS }
   };
 }
@@ -164,7 +249,15 @@ export function loadLabBoard(projectId: string, storage?: Pick<Storage, "getItem
   try {
     const parsed = JSON.parse(raw) as Partial<LabBoard>;
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.links)) return createEmptyLabBoard();
-    return {
+    return normalizeLabBoard(parsed);
+  } catch {
+    return createEmptyLabBoard();
+  }
+}
+
+export function normalizeLabBoard(parsed: Partial<LabBoard>): LabBoard {
+  if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.links)) return createEmptyLabBoard();
+  return {
       schemaVersion: 1,
       nodes: parsed.nodes.filter(isLabNode).map(normalizeLabNode),
       links: parsed.links.filter(isLabLink),
@@ -172,11 +265,9 @@ export function loadLabBoard(projectId: string, storage?: Pick<Storage, "getItem
       dismissedInsightIds: Array.isArray(parsed.dismissedInsightIds) ? parsed.dismissedInsightIds.filter((id): id is string => typeof id === "string") : [],
       teamMemory: Array.isArray(parsed.teamMemory) ? parsed.teamMemory.filter(isLabTeamAction).slice(-80) : [],
       insights: Array.isArray(parsed.insights) ? parsed.insights.filter(isLabInsight).slice(-80) : [],
+      gaps: Array.isArray(parsed.gaps) ? parsed.gaps.filter(isLabGap).slice(-40) : [],
       settings: { ...DEFAULT_LAB_SETTINGS, ...parsed.settings }
-    };
-  } catch {
-    return createEmptyLabBoard();
-  }
+  };
 }
 
 export function saveLabBoard(projectId: string, board: LabBoard, storage?: Pick<Storage, "setItem">): void {
@@ -253,6 +344,158 @@ export function deriveLabGroups(board: LabBoard, language: Language): LabGroup[]
     if (unique.length === 4) break;
   }
   return unique;
+}
+
+export function isLabDomainId(value: unknown): value is LabDomainId {
+  return typeof value === "string" && DOMAIN_ORDER.includes(value as LabDomainId);
+}
+
+export function classifyLabDomain(text: string): LabDomainId {
+  const value = normalize(text);
+  const match = (terms: string[]) => includesAny(value, terms);
+
+  if (match(["problema", "missao", "objetiv", "impact", "benefici", "quem precisa", "usuario", "stakeholder", "queimad", "agricultur", "florest", "demonstr", "purpose", "mission", "goal", "who needs", "user", "wildfire", "farm"])) return "mission";
+  if (match(["payload", "carga util", "camera", "sensor", "imagem", "dado", "medir", "colet", "detect", "image", "measurement", "data collection"])) return "payload";
+  if (match(["orbita", "orbital", "altitude", "trajet", "balão", "balao", "estratosfer", "ambiente", "noite", "cobertura", "orbit", "altitude", "trajectory", "balloon", "environment", "night", "coverage"])) return "environment";
+  if (match(["energia", "bateria", "potencia", "eletr", "placa", "pcb", "tensao", "corrente", "power", "battery", "electronic", "voltage", "current"])) return "electronics";
+  if (match(["telemet", "comunica", "wifi", "radio", "antena", "http", "alert", "transmit", "communication", "antenna", "downlink", "uplink"])) return "communications";
+  if (match(["software", "codigo", "firmware", "algorit", "modelo", "inteligencia artificial", "process", "program", "code", "machine learning"])) return "software";
+  if (match(["estrutura", "mecan", "massa", "peso", "material", "termic", "isolamento", "vibr", "structure", "mechanical", "mass", "weight", "thermal", "insulation"])) return "structure";
+  if (match(["operacao", "teste", "valid", "lanc", "recuper", "cronograma", "risco", "integr", "operation", "test", "launch", "recovery", "schedule", "risk", "integration"])) return "operations";
+  return "unassigned";
+}
+
+export function deriveMissionDomains(board: LabBoard, language: Language): LabDomain[] {
+  const nodesByDomain = new Map<LabDomainId, LabNode[]>();
+  board.nodes.forEach((node) => {
+    const domainId = isLabDomainId(node.domainId) ? node.domainId : classifyLabDomain(node.text);
+    nodesByDomain.set(domainId, [...(nodesByDomain.get(domainId) ?? []), node]);
+  });
+
+  const drafts = DOMAIN_ORDER
+    .filter((domainId) => (nodesByDomain.get(domainId)?.length ?? 0) > 0)
+    .map((domainId) => {
+      const domainNodes = nodesByDomain.get(domainId) ?? [];
+      const levels = domainHierarchyLevels(board, domainNodes);
+      const rows = [...new Set(domainNodes.map((node) => levels.get(node.id) ?? 0))]
+        .reduce((total, level) => total + Math.max(1, Math.ceil(domainNodes.filter((node) => (levels.get(node.id) ?? 0) === level).length / 3)), 0);
+      return {
+        id: domainId,
+        label: DOMAIN_LABELS[domainId][language],
+        nodeIds: domainNodes.map((node) => node.id),
+        height: Math.max(LAB_DOMAIN_MIN_HEIGHT, 112 + rows * (LAB_NODE_HEIGHT + 54) + 124)
+      };
+    });
+
+  const rowHeights = new Map<number, number>();
+  drafts.forEach((domain, index) => {
+    const row = Math.floor(index / LAB_DOMAIN_COLUMNS);
+    rowHeights.set(row, Math.max(rowHeights.get(row) ?? 0, domain.height));
+  });
+  const rowTop = new Map<number, number>();
+  let cursorY = LAB_DOMAIN_TOP;
+  [...rowHeights.entries()].sort(([first], [second]) => first - second).forEach(([row, height]) => {
+    rowTop.set(row, cursorY);
+    cursorY += height + LAB_DOMAIN_Y_GAP;
+  });
+
+  return drafts.map((domain, index) => ({
+    ...domain,
+    x: LAB_DOMAIN_LEFT + (index % LAB_DOMAIN_COLUMNS) * (LAB_DOMAIN_WIDTH + LAB_DOMAIN_X_GAP),
+    y: rowTop.get(Math.floor(index / LAB_DOMAIN_COLUMNS)) ?? LAB_DOMAIN_TOP,
+    width: LAB_DOMAIN_WIDTH
+  }));
+}
+
+export function organizeLabIntoDomains(
+  board: LabBoard,
+  language: Language,
+  organizations: LabNodeOrganization[] = [],
+  gapPlans: LabGapPlan[] = []
+): LabBoard {
+  const organizationById = new Map(organizations.map((plan) => [plan.nodeId, plan]));
+  const withAssignments: LabBoard = {
+    ...board,
+    nodes: board.nodes.map((node) => {
+      const plan = organizationById.get(node.id);
+      const domainId = isLabDomainId(plan?.domainId)
+        ? plan.domainId
+        : isLabDomainId(node.domainId) ? node.domainId : classifyLabDomain(node.text);
+      const hierarchyParentId = plan?.parentId && board.nodes.some((candidate) => candidate.id === plan.parentId)
+        ? plan.parentId
+        : node.hierarchyParentId;
+      return { ...node, domainId, hierarchyParentId };
+    })
+  };
+  const domains = deriveMissionDomains(withAssignments, language);
+  const nodesById = new Map(withAssignments.nodes.map((node) => [node.id, node]));
+  const nextNodes = withAssignments.nodes.map((node) => ({ ...node }));
+  const nextNodeById = new Map(nextNodes.map((node) => [node.id, node]));
+
+  domains.forEach((domain) => {
+    const domainNodes = domain.nodeIds.map((id) => nodesById.get(id)).filter((node): node is LabNode => Boolean(node));
+    const levels = domainHierarchyLevels(withAssignments, domainNodes, organizationById);
+    const levelRows = new Map<number, LabNode[]>();
+    domainNodes.forEach((node) => {
+      const level = levels.get(node.id) ?? 0;
+      levelRows.set(level, [...(levelRows.get(level) ?? []), node]);
+    });
+
+    let localRow = 0;
+    [...levelRows.entries()].sort(([first], [second]) => first - second).forEach(([, rowNodes]) => {
+      rowNodes.sort((first, second) => {
+        const firstPlan = organizationById.get(first.id);
+        const secondPlan = organizationById.get(second.id);
+        return (firstPlan?.order ?? Number.MAX_SAFE_INTEGER) - (secondPlan?.order ?? Number.MAX_SAFE_INTEGER)
+          || first.x - second.x
+          || first.createdAt.localeCompare(second.createdAt);
+      });
+      for (let start = 0; start < rowNodes.length; start += 3) {
+        const chunk = rowNodes.slice(start, start + 3);
+        const gap = 44;
+        const rowWidth = chunk.length * LAB_NODE_WIDTH + Math.max(0, chunk.length - 1) * gap;
+        const startX = domain.x + (domain.width - rowWidth) / 2;
+        chunk.forEach((node, column) => {
+          const target = nextNodeById.get(node.id);
+          if (!target) return;
+          const targetCenter = { x: target.x + LAB_NODE_WIDTH / 2, y: target.y + LAB_NODE_HEIGHT / 2 };
+          if (target.pinned && pointInsideBounds(targetCenter, domain)) return;
+          target.x = startX + column * (LAB_NODE_WIDTH + gap);
+          target.y = domain.y + 90 + localRow * (LAB_NODE_HEIGHT + 54);
+        });
+        localRow += 1;
+      }
+    });
+
+    const childrenByParent = new Map<string, string[]>();
+    domainNodes.forEach((node) => {
+      const parentId = organizationById.get(node.id)?.parentId || node.hierarchyParentId || confirmedParentFor(withAssignments, node.id, domain.nodeIds);
+      if (parentId && domain.nodeIds.includes(parentId)) childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), node.id]);
+    });
+    childrenByParent.forEach((childIds, parentId) => {
+      const parent = nextNodeById.get(parentId);
+      const children = childIds.map((id) => nextNodeById.get(id)).filter((node): node is LabNode => Boolean(node));
+      if (!parent || parent.pinned || children.length === 0) return;
+      const centerX = children.reduce((sum, child) => sum + child.x + LAB_NODE_WIDTH / 2, 0) / children.length;
+      parent.x = clamp(centerX - LAB_NODE_WIDTH / 2, domain.x + 34, domain.x + domain.width - LAB_NODE_WIDTH - 34);
+    });
+  });
+
+  const gaps = buildLabGaps({ ...withAssignments, nodes: nextNodes }, gapPlans)
+    .filter((gap) => !board.dismissedInsightIds.includes(gap.id));
+  return { ...withAssignments, nodes: nextNodes, gaps };
+}
+
+export function labGapPoint(gap: LabGap, board: LabBoard, domains: LabDomain[]): { x: number; y: number } {
+  const domain = domains.find((item) => item.id === gap.domainId);
+  if (domain) return { x: domain.x + domain.width / 2, y: domain.y + domain.height - 58 };
+  const first = board.nodes.find((node) => node.id === gap.afterNodeId);
+  const second = board.nodes.find((node) => node.id === gap.beforeNodeId);
+  if (first && second) return {
+    x: (first.x + second.x) / 2 + LAB_NODE_WIDTH / 2,
+    y: (first.y + second.y) / 2 + LAB_NODE_HEIGHT + 26
+  };
+  return { x: LAB_WORLD_WIDTH / 2, y: LAB_WORLD_HEIGHT / 2 };
 }
 
 export function computeGentleLabLayout(board: LabBoard, suggestions = deriveLabSuggestions(board), focusNodeId?: string): LabNode[] {
@@ -409,6 +652,118 @@ function center(node: LabNode): { x: number; y: number } {
   return { x: node.x + LAB_NODE_WIDTH / 2, y: node.y + LAB_NODE_HEIGHT / 2 };
 }
 
+function pointInsideBounds(point: { x: number; y: number }, bounds: { x: number; y: number; width: number; height: number }): boolean {
+  return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
+}
+
+function domainHierarchyLevels(
+  board: LabBoard,
+  nodes: LabNode[],
+  plans = new Map<string, LabNodeOrganization>()
+): Map<string, number> {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const levels = new Map<string, number>();
+
+  const visit = (nodeId: string, trail: Set<string>): number => {
+    const cached = levels.get(nodeId);
+    if (cached !== undefined) return cached;
+    if (trail.has(nodeId)) return 0;
+    const node = nodeById.get(nodeId);
+    if (!node) return 0;
+    const plan = plans.get(nodeId);
+    const parentId = plan?.parentId || node.hierarchyParentId || confirmedParentFor(board, nodeId, [...nodeIds]);
+    const inferred = parentId && nodeIds.has(parentId) ? visit(parentId, new Set(trail).add(nodeId)) + 1 : 0;
+    const level = clamp(Math.max(inferred, plan?.level ?? 0), 0, 8);
+    levels.set(nodeId, level);
+    return level;
+  };
+
+  nodes.forEach((node) => visit(node.id, new Set()));
+  return levels;
+}
+
+function confirmedParentFor(board: LabBoard, nodeId: string, allowedIds: string[]): string {
+  const allowed = new Set(allowedIds);
+  return board.links.find((link) => link.to === nodeId && allowed.has(link.from))?.from ?? "";
+}
+
+function buildLabGaps(board: LabBoard, plans: LabGapPlan[]): LabGap[] {
+  const domains = new Map<LabDomainId, LabNode[]>();
+  board.nodes.forEach((node) => {
+    const domainId = isLabDomainId(node.domainId) ? node.domainId : classifyLabDomain(node.text);
+    domains.set(domainId, [...(domains.get(domainId) ?? []), node]);
+  });
+  const planned: LabGap[] = [];
+  plans.forEach((plan) => {
+    const domainNodes = domains.get(plan.domainId) ?? [];
+    const domainNodeIds = new Set(domainNodes.map((node) => node.id));
+    const prompt = plan.prompt.trim().replace(/\s+/g, " ").slice(0, 220);
+    if (!prompt) return;
+    const afterNodeId = plan.afterNodeId && domainNodeIds.has(plan.afterNodeId) ? plan.afterNodeId : domainNodes[0]?.id ?? "";
+    const beforeNodeId = plan.beforeNodeId && domainNodeIds.has(plan.beforeNodeId) ? plan.beforeNodeId : domainNodes[1]?.id ?? "";
+    if (!afterNodeId && !beforeNodeId) return;
+    const id = gapId(plan.domainId, afterNodeId, beforeNodeId, prompt);
+    planned.push({ id, domainId: plan.domainId, afterNodeId, beforeNodeId, prompt, source: plan.source ?? "gemini" });
+  });
+  if (planned.length > 0) return dedupeGaps(planned);
+
+  const gaps: LabGap[] = [];
+  domains.forEach((domainNodes, domainId) => {
+    if (domainNodes.length < 2) return;
+    const domainNodeIds = new Set(domainNodes.map((node) => node.id));
+    const connectedIds = new Set<string>();
+    board.links.forEach((link) => {
+      if (!domainNodeIds.has(link.from) || !domainNodeIds.has(link.to)) return;
+      connectedIds.add(link.from);
+      connectedIds.add(link.to);
+    });
+    const disconnected = domainNodes.filter((node) => !connectedIds.has(node.id));
+    if (disconnected.length === 0 && connectedIds.size === domainNodes.length) return;
+    const first = disconnected[0] ?? domainNodes[0];
+    const second = disconnected[1] ?? domainNodes.find((node) => node.id !== first.id) ?? first;
+    const prompt = missingQuestionForDomain(domainId);
+    gaps.push({
+      id: gapId(domainId, first.id, second.id, prompt),
+      domainId,
+      afterNodeId: first.id,
+      beforeNodeId: second.id,
+      prompt,
+      source: "local"
+    });
+  });
+  return gaps.slice(0, 12);
+}
+
+function missingQuestionForDomain(domainId: LabDomainId): string {
+  const questions: Record<LabDomainId, string> = {
+    mission: "Que necessidade liga o problema ao resultado que a missão precisa entregar?",
+    payload: "Que dado precisa ser coletado para demonstrar o objetivo da missão?",
+    environment: "Que condição do ambiente ou da trajetória justifica estas escolhas?",
+    electronics: "Que orçamento de energia e interfaces ainda precisam ser definidos?",
+    communications: "Que informação precisa chegar, a quem e dentro de qual intervalo?",
+    software: "Que entrada, processamento e saída conectam estas partes do software?",
+    structure: "Que requisito físico ou ambiental orienta esta decisão de estrutura?",
+    operations: "Que critério de teste demonstra que esta etapa foi concluída?",
+    unassigned: "Que pergunta ajudaria a dar contexto e destino a estas ideias?"
+  };
+  return questions[domainId];
+}
+
+function gapId(domainId: LabDomainId, first: string, second: string, prompt: string): string {
+  const signature = `${domainId}:${[first, second].sort().join(":")}:${normalize(prompt).slice(0, 42)}`;
+  return `gap:${signature}`;
+}
+
+function dedupeGaps(gaps: LabGap[]): LabGap[] {
+  const seen = new Set<string>();
+  return gaps.filter((gap) => {
+    if (seen.has(gap.id)) return false;
+    seen.add(gap.id);
+    return true;
+  }).slice(0, 12);
+}
+
 function makeId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -435,7 +790,9 @@ function normalizeLabNode(node: LabNode): LabNode {
     ...node,
     pinned: node.pinned === true,
     maturity: node.maturity === "forming" || node.maturity === "decided" ? node.maturity : "draft",
-    createdAt: typeof node.createdAt === "string" ? node.createdAt : new Date(0).toISOString()
+    createdAt: typeof node.createdAt === "string" ? node.createdAt : new Date(0).toISOString(),
+    domainId: isLabDomainId(node.domainId) ? node.domainId : undefined,
+    hierarchyParentId: typeof node.hierarchyParentId === "string" ? node.hierarchyParentId : undefined
   };
 }
 
@@ -461,4 +818,15 @@ function isLabInsight(value: unknown): value is LabInsight {
     && typeof insight.question === "string"
     && insight.source === "gemini"
     && typeof insight.updatedAt === "string";
+}
+
+function isLabGap(value: unknown): value is LabGap {
+  if (!value || typeof value !== "object") return false;
+  const gap = value as Partial<LabGap>;
+  return typeof gap.id === "string"
+    && isLabDomainId(gap.domainId)
+    && typeof gap.afterNodeId === "string"
+    && typeof gap.beforeNodeId === "string"
+    && typeof gap.prompt === "string"
+    && (gap.source === "local" || gap.source === "gemini");
 }

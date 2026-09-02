@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   appendLabAction,
+  classifyLabDomain,
   computeGentleLabLayout,
   createLabAction,
   createEmptyLabBoard,
   createLabLink,
   createLabNode,
   deriveLabGroups,
+  deriveMissionDomains,
   deriveLabSuggestions,
   labStorageKey,
   loadLabBoard,
+  organizeLabIntoDomains,
   saveLabBoard
 } from "../src/lib/brainstormLab";
 
@@ -98,5 +101,41 @@ describe("experimental brainstorm board", () => {
     expect(arranged[0]).toMatchObject({ x: 100, y: 100, pinned: true });
     expect(afterDistance).toBeLessThan(beforeDistance);
     expect(Math.abs(arranged[1].x - board.nodes[1].x)).toBeLessThanOrEqual(64);
+  });
+
+  it("classifies ideas into mission areas and keeps local parents above children", () => {
+    const board = createEmptyLabBoard();
+    board.settings.missionStructure = true;
+    board.nodes = [
+      createLabNode("Definir o problema das queimadas", 800, 600, "problem"),
+      createLabNode("Identificar quem precisa do alerta", 120, 900, "beneficiary"),
+      createLabNode("Usar câmera térmica", 300, 300, "camera")
+    ];
+    board.links = [createLabLink("problem", "beneficiary", "confirmed")];
+
+    const organized = organizeLabIntoDomains(board, "pt");
+    const problem = organized.nodes.find((node) => node.id === "problem")!;
+    const beneficiary = organized.nodes.find((node) => node.id === "beneficiary")!;
+
+    expect(classifyLabDomain("Bateria e orçamento de potência")).toBe("electronics");
+    expect(problem.domainId).toBe("mission");
+    expect(organized.nodes.find((node) => node.id === "camera")?.domainId).toBe("payload");
+    expect(beneficiary.y).toBeGreaterThan(problem.y);
+    expect(deriveMissionDomains(organized, "pt").map((domain) => domain.id)).toEqual(["mission", "payload"]);
+  });
+
+  it("creates a question instead of inventing a missing hierarchy link", () => {
+    const board = createEmptyLabBoard();
+    board.settings.missionStructure = true;
+    board.nodes = [
+      createLabNode("Câmera térmica", 100, 100, "camera"),
+      createLabNode("Armazenar imagens", 500, 100, "storage")
+    ];
+
+    const organized = organizeLabIntoDomains(board, "pt");
+    expect(organized.links).toHaveLength(0);
+    expect(organized.gaps).toHaveLength(1);
+    expect(organized.gaps[0]).toMatchObject({ domainId: "payload", source: "local" });
+    expect(organized.gaps[0].prompt).toContain("dado");
   });
 });

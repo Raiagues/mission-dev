@@ -21,6 +21,15 @@ export type ProgramModality = {
   description: Record<Language, string>;
   categories: ProgramCategory[];
   officialDocuments: OfficialProgramDocument[];
+  requirements: Array<Record<Language, string>>;
+  phases: Array<{
+    id: string;
+    label: Record<Language, string>;
+    date: string;
+    startDate?: string;
+    endDate?: string;
+    url: string;
+  }>;
   milestone: {
     label: Record<Language, string>;
     date: string;
@@ -93,6 +102,21 @@ export const REFERENCE_PROGRAMS: ReferenceProgram[] = [
           { id: "n3", label: { pt: "N3 · Ensino Superior", en: "N3 · Higher education" }, description: { pt: "Categoria para equipes universitárias.", en: "Category for university teams." } }
         ],
         officialDocuments: practicalDocuments,
+        requirements: [
+          { pt: "Definir o problema, os objetivos da missão e o mérito científico", en: "Define the problem, mission objectives, and scientific merit" },
+          { pt: "Projetar carga útil e módulo de serviço como um sistema integrado", en: "Design payload and service module as an integrated system" },
+          { pt: "Descrever subsistemas essenciais e a operação da missão", en: "Describe essential subsystems and mission operations" },
+          { pt: "Registrar materiais, métodos, requisitos e restrições", en: "Record materials, methods, requirements, and constraints" },
+          { pt: "Planejar desenvolvimento, testes, responsabilidades e entregas", en: "Plan development, tests, responsibilities, and deliverables" },
+          { pt: "Considerar estrutura, armazenamento de dados, energia e telemetria da fase vigente", en: "Consider structure, data storage, power, and telemetry for the current phase" }
+        ],
+        phases: [
+          { id: "training", label: { pt: "Fase 0 · Treinamento", en: "Phase 0 · Training" }, date: "24/02–10/12/2025", startDate: "2025-02-24", endDate: "2025-12-10", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" },
+          { id: "planning", label: { pt: "Fase 1 · Planejamento de missão", en: "Phase 1 · Mission planning" }, date: "24/02–26/10/2025", startDate: "2025-02-24", endDate: "2025-10-26", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/fase-1-planejamento-de-missao-imagine-o-seu-satelite" },
+          { id: "build", label: { pt: "Fase 2 · Construção, programação e testes", en: "Phase 2 · Build, program, and test" }, date: "27/10/2025–01/05/2026", startDate: "2025-10-27", endDate: "2026-05-01", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/fase-2-construa-programe-teste-seu-satelite" },
+          { id: "regional", label: { pt: "Fase 3 · Etapas regionais", en: "Phase 3 · Regional events" }, date: "05–09/2026", startDate: "2026-05-01", endDate: "2026-09-30", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" },
+          { id: "national", label: { pt: "Fase 4 · Etapa nacional", en: "Phase 4 · National event" }, date: "2º semestre de 2026", url: "https://wiki.obsat.org.br/books/modalidade-pratica/page/cronograma" }
+        ],
         milestone: {
           label: { pt: "Regional Sudeste 2 · LASC", en: "Southeast Regional 2 · LASC" },
           date: "02–05/09/2026",
@@ -115,6 +139,11 @@ export const REFERENCE_PROGRAMS: ReferenceProgram[] = [
           { id: "nt6", label: { pt: "NT6 · Médio ou Técnico", en: "NT6 · Upper secondary or technical" }, description: { pt: "Ensino médio e técnico.", en: "Upper-secondary and technical education." } }
         ],
         officialDocuments: theoreticalDocuments,
+        requirements: [
+          { pt: "Acompanhar o conteúdo e o cronograma do nível selecionado", en: "Follow the content and schedule for the selected level" },
+          { pt: "Registrar estudos, dúvidas e evidências de aprendizagem", en: "Record studies, questions, and learning evidence" }
+        ],
+        phases: [],
         milestone: {
           label: { pt: "Fase 1 · avaliação online", en: "Phase 1 · online assessment" },
           date: "14–17/09/2026",

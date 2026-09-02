@@ -103,6 +103,24 @@
   gap: 8px;
 }
 
+.brain-v2 .brain-toolbar > .lab-structure-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.brain-v2 .brain-toolbar > .lab-structure-button > svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.7;
+}
+
+.brain-v2 .brain-toolbar > .lab-structure-button.active {
+  border-color: rgba(224, 184, 102, .62);
+  color: #f2d38e;
+  background: rgba(91, 67, 27, .28);
+}
+
 .brain-v2 .brain-toolbar > .lab-auto-toolbar-button > i {
   width: 7px;
   height: 7px;
@@ -734,6 +752,209 @@
   overflow: visible;
 }
 
+.lab-domain {
+  position: absolute;
+  z-index: 0;
+  overflow: hidden;
+  border: 1px dashed rgba(100, 176, 228, .32);
+  border-radius: 7px;
+  background: rgba(7, 27, 45, .34);
+  pointer-events: none;
+  transition: border-color .24s ease, background .24s ease, opacity .24s ease;
+}
+
+.lab-domain::after {
+  position: absolute;
+  inset: 69px 0 auto;
+  height: 1px;
+  background: rgba(126, 183, 235, .14);
+  content: "";
+}
+
+.lab-domain > header {
+  min-height: 69px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 0 18px;
+  pointer-events: auto;
+}
+
+.lab-domain > header > span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.lab-domain > header small {
+  color: #668ba9;
+  font-size: 8px;
+  font-weight: 620;
+}
+
+.lab-domain > header strong {
+  overflow: hidden;
+  color: #dceaf5;
+  font-size: 16px;
+  font-weight: 470;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lab-domain > header > em {
+  margin-left: auto;
+  border: 1px solid rgba(126, 183, 235, .25);
+  border-radius: 10px;
+  padding: 3px 8px;
+  color: #8eaac1;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.lab-domain > header > div {
+  display: flex;
+  gap: 4px;
+}
+
+.lab-domain > header button {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(126, 183, 235, .24);
+  border-radius: 4px;
+  padding: 0;
+  color: #8eb8d8;
+  background: rgba(5, 25, 43, .76);
+  cursor: pointer;
+}
+
+.lab-domain > header button:hover {
+  border-color: rgba(126, 191, 250, .72);
+  color: #e9f5ff;
+  background: rgba(24, 66, 102, .74);
+}
+
+.lab-domain > header button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.lab-domain.domain-mission,
+.lab-domain.domain-operations {
+  border-color: rgba(224, 184, 102, .4);
+  background: rgba(58, 45, 22, .2);
+}
+
+.lab-domain.domain-payload,
+.lab-domain.domain-communications {
+  border-color: rgba(51, 212, 160, .35);
+  background: rgba(9, 57, 49, .18);
+}
+
+.lab-domain.domain-software {
+  border-color: rgba(169, 160, 255, .36);
+  background: rgba(45, 39, 82, .18);
+}
+
+.lab-domain.domain-structure {
+  border-color: rgba(226, 132, 116, .34);
+  background: rgba(71, 37, 35, .16);
+}
+
+.lab-domain.domain-unassigned {
+  border-color: rgba(150, 167, 180, .3);
+  background: rgba(29, 39, 47, .18);
+}
+
+.lab-canvas.semantic-overview .lab-domain {
+  border-style: solid;
+  border-width: 2px;
+  background: rgba(7, 27, 45, .72);
+}
+
+.lab-canvas.semantic-overview .lab-domain > header {
+  height: 100%;
+  justify-content: center;
+  flex-direction: column;
+  padding: 42px;
+  text-align: center;
+}
+
+.lab-canvas.semantic-overview .lab-domain::after,
+.lab-canvas.semantic-overview .lab-domain > header small,
+.lab-canvas.semantic-overview .lab-node,
+.lab-canvas.semantic-overview .lab-relations,
+.lab-canvas.semantic-overview .lab-gap,
+.lab-canvas.semantic-overview .lab-composer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lab-canvas.semantic-overview .lab-domain > header strong {
+  max-width: 100%;
+  font-size: 34px;
+  white-space: normal;
+}
+
+.lab-canvas.semantic-overview .lab-domain > header > em {
+  margin-left: 0;
+  border-color: rgba(126, 183, 235, .42);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.lab-canvas.semantic-overview .lab-domain > header > div {
+  margin-top: 7px;
+}
+
+.lab-canvas.semantic-overview .lab-domain > header button {
+  width: 54px;
+  height: 54px;
+}
+
+.lab-canvas.semantic-overview .lab-domain > header button svg {
+  width: 23px;
+  height: 23px;
+}
+
+.lab-gap {
+  position: absolute;
+  z-index: 3;
+  width: 270px;
+  min-height: 72px;
+  display: grid;
+  gap: 6px;
+  border: 1px dashed rgba(224, 184, 102, .58);
+  border-radius: 5px;
+  padding: 10px 12px;
+  color: #d8e5ef;
+  background: rgba(32, 31, 32, .84);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  text-align: left;
+}
+
+.lab-gap:hover,
+.lab-gap.selected {
+  border-style: solid;
+  border-color: #e7c273;
+  background: rgba(53, 45, 31, .95);
+  box-shadow: 0 0 0 4px rgba(224, 184, 102, .07);
+}
+
+.lab-gap > span {
+  color: #e0b866;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.lab-gap > strong {
+  font-size: 10px;
+  font-weight: 470;
+  line-height: 1.38;
+}
+
 .lab-relation-visible,
 .lab-relation-hit {
   fill: none;
@@ -1008,6 +1229,42 @@
   color: #fff3d8;
   border-color: currentColor;
   box-shadow: 0 0 7px rgba(224, 184, 102, .22);
+}
+
+.lab-node-suggestion {
+  position: absolute;
+  z-index: 8;
+  right: 72px;
+  top: 17px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(169, 160, 255, .52);
+  border-radius: 50%;
+  padding: 0;
+  color: #bdb7ff;
+  background: rgba(35, 31, 58, .95);
+  cursor: pointer;
+  font-size: 9px;
+}
+
+.lab-node-suggestion:hover {
+  border-color: currentColor;
+  color: #e1ddff;
+}
+
+.lab-decision-sync {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  color: rgba(100, 222, 184, .72);
+  font-size: 7px;
+  font-weight: 560;
+}
+
+.lab-gap-review {
+  border-color: rgba(224, 184, 102, .5);
 }
 
 .lab-connection-port {

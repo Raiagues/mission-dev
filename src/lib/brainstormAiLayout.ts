@@ -5,6 +5,7 @@ import {
   LAB_NODE_WIDTH,
   LAB_WORLD_HEIGHT,
   LAB_WORLD_WIDTH,
+  organizeLabIntoDomains,
   suggestionPairId
 } from "./brainstormLab";
 import type { LabBoard, LabInsight, LabNode, LabSettings } from "./brainstormLab";
@@ -19,6 +20,32 @@ const CONTEXT_LEFT = 2040;
 
 export function applyBrainstormAiOrganization(board: LabBoard, analysis: BrainstormAiAnalysis, language: Language): LabBoard {
   const planById = new Map(analysis.nodePlans.map((plan) => [plan.nodeId, plan]));
+  if (board.settings.missionStructure) {
+    const rewrittenBoard: LabBoard = {
+      ...board,
+      nodes: board.nodes.map((node) => {
+        const plan = planById.get(node.id);
+        const rewrittenText = board.settings.rewriteIdeas ? plan?.rewrittenText.trim().replace(/\s+/g, " ").slice(0, 220) : "";
+        return { ...node, text: rewrittenText || node.text };
+      })
+    };
+    const structured = organizeLabIntoDomains(
+      rewrittenBoard,
+      language,
+      analysis.nodePlans.map((plan) => ({
+        nodeId: plan.nodeId,
+        domainId: plan.domainId,
+        parentId: plan.parentId,
+        level: plan.level,
+        order: plan.order
+      })),
+      (analysis.gaps ?? []).map((gap) => ({ ...gap, source: "gemini" as const }))
+    );
+    return {
+      ...structured,
+      insights: brainstormAiInsights(analysis, language, board.settings).filter((insight) => !board.dismissedInsightIds.includes(insight.id))
+    };
+  }
   const mainPlans = analysis.nodePlans.filter((plan) => plan.lane === "main" && planById.has(plan.nodeId));
   const contextPlans = analysis.nodePlans.filter((plan) => plan.lane === "needs-context" && planById.has(plan.nodeId));
   const levelById = resolveLevels(mainPlans, board);

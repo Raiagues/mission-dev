@@ -73,7 +73,7 @@ describe("brainstorm AI contract", () => {
     expect(mergeBrainstormAiSuggestions([], analysis, board)[0]).toMatchObject({ source: "gemini", explanation: "A câmera pode apoiar a operação noturna." });
   });
 
-  it("sends organization intent, empty mission context and bounded team memory", () => {
+  it("sends organization intent, mission context, domain focus and bounded team memory", () => {
     const board = createEmptyLabBoard();
     board.nodes = [createLabNode("Ideia", 100, 100, "idea")];
     board.teamMemory = Array.from({ length: 90 }, (_, index) => ({
@@ -85,11 +85,12 @@ describe("brainstorm AI contract", () => {
       summary: `Edit ${index}`
     }));
 
-    const request = createBrainstormAiRequest(board, "pt", "organize");
-    expect(request).toMatchObject({ intent: "organize", missionContext: "" });
+    const request = createBrainstormAiRequest(board, "pt", "organize", "{\"competition\":\"OBSAT\"}", "payload");
+    expect(request).toMatchObject({ intent: "organize", missionContext: "{\"competition\":\"OBSAT\"}", focusDomainId: "payload" });
     expect(request.teamMemory).toHaveLength(80);
     expect(request.teamMemory[0].summary).toBe("Edit 10");
     expect(parseBrainstormAiRequest(request)).toEqual(request);
+    expect(buildBrainstormAiPrompt(request)).toContain("Focus this organization pass on the payload mission area");
   });
 
   it("extracts structured JSON from a Gemini response envelope", () => {

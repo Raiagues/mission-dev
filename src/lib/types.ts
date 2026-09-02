@@ -15,6 +15,8 @@ export type MissionNode = {
   type?: "normal" | "center" | "question" | "suggestion";
   issueKey?: string;
   bucket?: NodeBucket;
+  originLabNodeId?: string;
+  domainId?: string;
 };
 
 export type MissionLink = {
@@ -26,6 +28,7 @@ export type MissionLink = {
   targetSide?: "top" | "right" | "bottom" | "left";
   sourceOrder?: number;
   targetOrder?: number;
+  originLabLinkId?: string;
 };
 
 export type IssueSuggestion = {

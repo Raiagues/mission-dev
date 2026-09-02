@@ -149,6 +149,54 @@ await page.screenshot({ path: "/tmp/norte-memory-new.png", fullPage: true });
 await page.locator(".pm-footer > button").click();
 await page.waitForURL(/#\/brainstorming$/u);
 
+const conceptionTabs = page.locator(".brain-mode-tabs > button");
+if (await conceptionTabs.count() !== 3) throw new Error("Conception should expose timeline, discovery, and consolidated system tabs.");
+if ((await conceptionTabs.nth(0).innerText()).includes("Cronograma") === false) throw new Error("Timeline should be the first conception view.");
+if ((await conceptionTabs.nth(1).innerText()).includes("Descoberta") === false || (await conceptionTabs.nth(1).innerText()).includes("BETA") === false) throw new Error("Discovery should be the first map and remain marked as beta.");
+await page.locator(".lab-canvas").waitFor();
+await page.waitForTimeout(1800);
+await page.getByRole("button", { name: "Nova ideia", exact: true }).click();
+const discoveryComposer = page.locator(".lab-composer textarea");
+await discoveryComposer.waitFor();
+await discoveryComposer.fill("Observar queimadas na Amazônia");
+await discoveryComposer.press("Enter");
+await discoveryComposer.fill("Detectar focos durante a noite");
+await discoveryComposer.press("Enter");
+await discoveryComposer.fill("Usar câmera térmica");
+await discoveryComposer.press("Enter");
+await discoveryComposer.press("Escape");
+await page.waitForTimeout(1100);
+if (await page.locator(".lab-node").count() !== 3) throw new Error("Discovery should create ideas continuously with Enter.");
+await page.getByRole("button", { name: "Estruturar missão", exact: true }).click();
+await page.locator(".lab-domain").first().waitFor();
+await page.waitForTimeout(1000);
+if (await page.locator(".lab-domain").count() < 2) throw new Error("Mission structure should separate ideas into contextual areas.");
+if (await page.locator(".lab-gap").count() < 1) throw new Error("Disconnected hierarchy fragments should expose a question instead of inventing a relation.");
+await page.screenshot({ path: "/tmp/norte-discovery-structured.png", fullPage: true });
+
+await page.locator(".lab-node").first().locator(".lab-node-head button").click();
+await page.locator(".lab-card-menu").getByRole("button", { name: "Decidida", exact: true }).click();
+await page.waitForFunction(() => [...document.querySelectorAll(".brain-mode-tabs .tab-count")].some((element) => element.textContent?.trim() === "1"));
+await page.getByRole("tab", { name: /Sistema consolidado/u }).click();
+await page.locator(".mission-node-title", { hasText: "Observar queimadas na Amazônia" }).waitFor();
+await page.screenshot({ path: "/tmp/norte-system-consolidated.png", fullPage: true });
+
+await page.getByRole("tab", { name: /Cronograma/u }).click();
+await page.locator(".conception-timeline").waitFor();
+if (await page.locator(".timeline-phase-list > a").count() < 5) throw new Error("The OBSAT timeline should expose the official conception phases.");
+await page.screenshot({ path: "/tmp/norte-conception-timeline.png", fullPage: true });
+
+await page.getByRole("tab", { name: /Descoberta/u }).click();
+await page.locator(".lab-domain").first().waitFor();
+for (let index = 0; index < 7; index += 1) await page.getByRole("button", { name: "Diminuir zoom", exact: true }).click();
+await page.locator(".lab-canvas.semantic-overview").waitFor();
+const overviewNodeOpacity = await page.locator(".lab-canvas.semantic-overview .lab-node").first().evaluate((element) => getComputedStyle(element).opacity);
+if (overviewNodeOpacity !== "0") throw new Error("Semantic overview should summarize domains instead of rendering every idea.");
+await page.screenshot({ path: "/tmp/norte-discovery-overview.png", fullPage: true });
+await page.getByRole("button", { name: /Abrir área:/u }).first().click();
+await page.locator(".lab-canvas:not(.semantic-overview)").waitFor();
+await page.screenshot({ path: "/tmp/norte-discovery-domain.png", fullPage: true });
+
 await page.goto(baseUrl + "#/", { waitUntil: "networkidle" });
 await page.locator(".home-action-card.accent-open").click();
 if (await page.locator(".home-project-picker-row").count() !== initialProjectCount + 1) throw new Error("A project should appear only after final confirmation.");
@@ -172,11 +220,35 @@ await laptop.locator(".pm-workspace").waitFor();
 await laptop.screenshot({ path: "/tmp/norte-memory-laptop.png", fullPage: true });
 results.push(await measure(laptop, "memory-laptop"));
 
+const laptopConception = await browser.newPage({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1 });
+await laptopConception.goto(baseUrl + "?view=discovery#/brainstorming", { waitUntil: "networkidle" });
+await laptopConception.locator(".brainstorm-lab").waitFor();
+const conceptionLayout = await laptopConception.evaluate(() => {
+  const tabs = document.querySelector(".brain-mode-tabs")?.getBoundingClientRect();
+  const toolbar = document.querySelector(".lab-toolbar")?.getBoundingClientRect();
+  return {
+    tabsRight: tabs?.right ?? 0,
+    toolbarRight: toolbar?.right ?? 0,
+    toolbarBottom: toolbar?.bottom ?? 0
+  };
+});
+if (conceptionLayout.tabsRight > 1366 || conceptionLayout.toolbarRight > 1366 || conceptionLayout.toolbarBottom > 768) {
+  throw new Error("The conception navigation or toolbar does not fit a 1366x768 notebook viewport.");
+}
+await laptopConception.screenshot({ path: "/tmp/norte-conception-laptop.png", fullPage: true });
+results.push(await measure(laptopConception, "conception-laptop"));
+
 const mobileTeams = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 await mobileTeams.goto(baseUrl + "#/teams", { waitUntil: "networkidle" });
 await mobileTeams.locator(".teams-hub-tabs").waitFor();
 await mobileTeams.screenshot({ path: "/tmp/norte-teams-mobile.png", fullPage: true });
 results.push(await measure(mobileTeams, "teams-mobile"));
+
+const mobileConception = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+await mobileConception.goto(baseUrl + "?view=timeline#/brainstorming", { waitUntil: "networkidle" });
+await mobileConception.locator(".brain-mode-tabs").waitFor();
+await mobileConception.screenshot({ path: "/tmp/norte-conception-mobile.png", fullPage: true });
+results.push(await measure(mobileConception, "conception-mobile"));
 
 for (const result of results) {
   if (result.bodyOverflowX > 1) throw new Error(`${result.label} overflows horizontally by ${result.bodyOverflowX}px.`);

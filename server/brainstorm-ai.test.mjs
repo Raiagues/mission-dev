@@ -4,8 +4,9 @@ import { createBrainstormAiService } from "./brainstorm-ai.mjs";
 
 const request = {
   language: "pt",
-  intent: "analyze",
-  missionContext: "",
+  intent: "organize",
+  focusDomainId: "payload",
+  missionContext: "{\"competition\":\"OBSAT\",\"deadline\":\"2026-09-05\"}",
   nodes: [
     { id: "a", text: "Operar à noite", x: 0, y: 0, pinned: false, maturity: "draft" },
     { id: "b", text: "Usar câmera térmica", x: 200, y: 200, pinned: false, maturity: "forming" }
@@ -18,15 +19,17 @@ const request = {
 
 test("the Gemini proxy keeps the key server-side and caches structured results", async () => {
   let calls = 0;
+  let upstreamRequest = "";
   const service = createBrainstormAiService({
     apiKey: "server-only-key",
     model: "gemini-test",
     fetch: async (_url, init) => {
       calls += 1;
+      upstreamRequest = init.body;
       assert.equal(init.headers["x-goog-api-key"], "server-only-key");
       assert.doesNotMatch(init.body, /server-only-key/u);
       return new Response(JSON.stringify({
-        candidates: [{ content: { parts: [{ text: JSON.stringify({ relations: [], groups: [], nodePlans: [], tensions: [] }) }] } }]
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ relations: [], groups: [], nodePlans: [], tensions: [], gaps: [] }) }] } }]
       }), { status: 200, headers: { "content-type": "application/json" } });
     }
   });
@@ -37,6 +40,10 @@ test("the Gemini proxy keeps the key server-side and caches structured results",
   assert.equal(first.model, "gemini-test");
   assert.deepEqual(second, first);
   assert.equal(calls, 1);
+  assert.match(upstreamRequest, /Focus this organization pass on the payload mission area/u);
+  assert.match(upstreamRequest, /OBSAT/u);
+  assert.match(upstreamRequest, /2026-09-05/u);
+  assert.deepEqual(JSON.parse(upstreamRequest).generationConfig.responseSchema.required, ["relations", "groups", "nodePlans", "tensions", "gaps"]);
   assert.doesNotMatch(JSON.stringify(first), /server-only-key/u);
 });
 
